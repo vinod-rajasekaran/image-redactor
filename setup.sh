@@ -45,7 +45,17 @@ pip install -r requirements.txt -q
 echo "Downloading spaCy language model (en_core_web_lg, ~400MB)..."
 python -m spacy download en_core_web_lg
 
-mkdir -p input_images output_images
+mkdir -p input_images runs
+
+# Optional WeChat QR models (--wechat-qr). Small, and only a supplement to
+# the stock detector — see README "Why the defaults are what they are".
+echo "Downloading WeChat QR models (optional, ~1MB)..."
+mkdir -p models
+WECHAT_BASE=https://raw.githubusercontent.com/WeChatCV/opencv_3rdparty/master
+for f in detect.prototxt detect.caffemodel sr.prototxt sr.caffemodel; do
+  [ -f "models/$f" ] || curl -sfL -o "models/$f" "$WECHAT_BASE/$f" \
+    || echo "  (skipped $f — --wechat-qr will be unavailable)"
+done
 
 echo ""
 echo "Setup complete. Next steps:"

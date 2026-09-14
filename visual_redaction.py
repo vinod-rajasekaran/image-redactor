@@ -8,6 +8,7 @@ number while leaving the QR intact is not redaction at all.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -65,7 +66,39 @@ def _regions_from_points(points, kind: str, size, payloads=None) -> list[VisualR
     return regions
 
 
-def detect_codes(image: Image.Image, use_pyzbar: bool = False) -> list[VisualRegion]:
+WECHAT_MODEL_DIR = Path(__file__).parent / "models"
+WECHAT_MODEL_FILES = (
+    "detect.prototxt",
+    "detect.caffemodel",
+    "sr.prototxt",
+    "sr.caffemodel",
+)
+
+
+def wechat_models_available() -> bool:
+    return all((WECHAT_MODEL_DIR / f).exists() for f in WECHAT_MODEL_FILES)
+
+
+def _detect_wechat(image: Image.Image) -> list[VisualRegion]:
+    """WeChat QR detector — an opt-in supplement, never the primary path.
+
+    It is strictly better than the stock detector on small, blurry or
+    angled *real* QR codes, and returns the decoded payload. But its only
+    Python entry point is detectAndDecode(), so it yields no box at all
+    for a code it cannot read. Measured here: 4 codes located by the stock
+    detector, 0 by WeChat, while a genuine encodable QR was found and
+    decoded by both. Union it with the stock detector; never substitute.
+    """
+    detector = cv2.wechat_qrcode.WeChatQRCode(
+        *(str(WECHAT_MODEL_DIR / f) for f in WECHAT_MODEL_FILES)
+    )
+    texts, points = detector.detectAndDecode(np.array(image.convert("RGB")))
+    return _regions_from_points(points, "qr_code", image.size, list(texts))
+
+
+def detect_codes(
+    image: Image.Image, use_pyzbar: bool = False, use_wechat: bool = False
+) -> list[VisualRegion]:
     """Locate QR codes and barcodes, preferring detection over decoding.
 
     A decorative, damaged or low-resolution code leaks nothing once it is
@@ -105,6 +138,12 @@ def detect_codes(image: Image.Image, use_pyzbar: bool = False) -> list[VisualReg
                 payloads = None
             regions += _regions_from_points(bar_points, "barcode", image.size, payloads)
 
+    if use_wechat and wechat_models_available():
+        try:
+            regions += _detect_wechat(image)
+        except Exception:
+            pass
+
     if use_pyzbar:
         try:
             from pyzbar import pyzbar
@@ -143,12 +182,15 @@ def detect_visual_pii(
     faces: bool = True,
     codes: bool = True,
     use_pyzbar: bool = False,
+    use_wechat: bool = False,
 ) -> list[VisualRegion]:
     regions: list[VisualRegion] = []
     if faces:
         regions += detect_faces(image)
     if codes:
-        regions += detect_codes(image, use_pyzbar=use_pyzbar)
+        regions += detect_codes(
+            image, use_pyzbar=use_pyzbar, use_wechat=use_wechat
+        )
     return regions
 
 

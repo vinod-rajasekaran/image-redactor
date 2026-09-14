@@ -239,6 +239,7 @@ def process_image(
     upscale: str = "auto",
     visual_pii: bool = True,
     use_pyzbar: bool = False,
+    use_wechat: bool = False,
 ) -> ImageResult:
     from PIL import Image
 
@@ -282,7 +283,9 @@ def process_image(
     regions = []
     if visual_pii:
         try:
-            regions = detect_visual_pii(image, use_pyzbar=use_pyzbar)
+            regions = detect_visual_pii(
+                image, use_pyzbar=use_pyzbar, use_wechat=use_wechat
+            )
         except Exception:
             logger.exception("Visual PII detection failed for %s", path.name)
     visual_counts: dict[str, int] = {}
@@ -459,6 +462,16 @@ def main() -> None:
             "needs the zbar system library"
         ),
     )
+    parser.add_argument(
+        "--wechat-qr",
+        action="store_true",
+        help=(
+            "Additionally run the WeChat QR detector (needs models/, see "
+            "setup.sh). Supplements rather than replaces the stock detector: "
+            "it is better on small/blurry real QR codes and returns payloads, "
+            "but yields no box for a code it cannot decode"
+        ),
+    )
     parser.set_defaults(visual_pii=True)
     parser.add_argument(
         "--threshold",
@@ -539,6 +552,7 @@ def main() -> None:
         "ocr_backend": args.ocr,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
+        "wechat_qr": args.wechat_qr,
         "score_threshold": args.threshold,
         "entities": args.entities or "all_supported",
         "ocr_tolerant_aadhaar": not args.strict_aadhaar,
@@ -588,6 +602,7 @@ def main() -> None:
                 args.upscale,
                 args.visual_pii,
                 args.pyzbar,
+                args.wechat_qr,
             )
             results.append(result)
             progress.advance(task)

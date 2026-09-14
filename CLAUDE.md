@@ -24,10 +24,17 @@ ImageRedactorEngine). Entirely local, no cloud calls. Design spec:
   with `detectAndDecode()`** — the latter returns no boxes for codes it
   cannot read, which silently skips exactly the unreadable codes that
   most need blacking out. This bug was actually shipped once and caught
-  only because the water-bill barcode count stayed 0. pyzbar is opt-in
-  (`--pyzbar`) for payloads only; it decoded nothing in the sample set
-  and needs the `zbar` system lib. `PAD_RATIO` pads faces 30% because
-  Haar boxes clip chin/hair and leave a recognisable sliver.
+  only because the water-bill barcode count stayed 0. pyzbar (`--pyzbar`)
+  and WeChat (`--wechat-qr`) are opt-in *supplements*, unioned with the
+  stock detector, never substitutes — WeChat was measured at 0 codes vs
+  the stock detector's 4 for exactly the decode-gating reason above.
+  `PAD_RATIO` pads faces 30% because Haar boxes clip chin/hair.
+
+**Before changing any default, read "Why the defaults are what they are"
+in README.md.** Every row there records a measured result, several of
+them counterintuitive (0.4 not 0.5; tesseract not paddle; no regex
+guards; WeChat rejected). Changing one without re-running the sample set
+is how the PII leaks come back.
 - `runs/<name>/` — each run writes `config.json` (inputs),
   `summary.json` (config + results), `run.log`, `images/`. Gitignored:
   may contain real PII.

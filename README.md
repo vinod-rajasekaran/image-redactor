@@ -105,6 +105,34 @@ skipped — it does not stop the batch. Exit code is `2` if any image
 failed, `0` otherwise, `1` on a fatal startup error (missing input
 folder, missing Tesseract, missing spaCy model).
 
+## Why the defaults are what they are
+
+Every default below was chosen against measured evidence on the sample
+set, and several are deliberately *not* the obvious choice. If you are
+tempted to change one, the "what it buys" column is what you would be
+giving up.
+
+| Default | Why not the obvious choice | What it buys |
+|---|---|---|
+| `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 silently drops every context-boosted weak match | A real PAN card's number is redacted instead of left visible; `IN_VOTER` too. At 0.5, `IN_PASSPORT` can *never* fire |
+| `--ocr tesseract` | PaddleOCR is clearly more accurate (234 entities vs 205) | 23x faster (12.5s vs 285s for 20 images) for iteration. Use `--ocr paddle` when quality matters — it fixes the garbled email, the unreadable loan form, and `IN_VEHICLE_REGISTRATION` |
+| `--upscale auto` | Leaving images at native size is simpler | A real job-application photo went from **0 detections to 7**. Also *raises* precision: the PAN card dropped from 9 spurious `PERSON` hits to a correct 4 |
+| visual PII **on** | Presidio only ever redacts OCR'd text | Faces, QR codes and barcodes get redacted. An intact Aadhaar QR encodes name, DOB and address — redacting the printed number while leaving the QR is not redaction |
+| OpenCV `detect()`, never `detectAndDecode()` | The decode APIs look strictly more capable | Decode-gated APIs return **no box** for a code they cannot read, silently skipping exactly the unreadable codes that most need blacking out. This bug shipped once here and was caught only because a barcode count stayed at 0 |
+| `--pyzbar` **off** | pyzbar is the usual go-to for barcodes | It decoded **0** of the codes in the sample set, and needs the `zbar` system library. OpenCV located all of them, including one pyzbar missed entirely |
+| `--wechat-qr` **off** | The WeChat model is genuinely better at small/blurry QR | **Validated and rejected as a default:** it found **0 codes vs the stock detector's 4**, because its only Python entry point is `detectAndDecode()`. A control test on an encodable QR confirmed it works — it is decode-gated, not broken. Kept as an opt-in supplement (unioned, never substituted) for real documents where payloads matter |
+| Aadhaar OCR-tolerant fallback **on** | Stock Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, not down-scored, so one OCR digit error leaves a real Aadhaar fully visible. A real sample card's number is checksum-invalid: stock Presidio redacted nothing, the fallback caught it |
+| That fallback has **no look-around guards** | Guards would stop it matching inside credit-card numbers | OCR flattens the page into one string with no field boundaries, so an adjacent phone number is indistinguishable from a continuation. Guards were tried and dropped real Aadhaars. Cost is label precision in the report, not redaction quality |
+| spaCy `en_core_web_lg` | A newer/Indic NER model sounds better for Indian documents | Aadhaar/PAN/voter are **regex + checksum**, not NER — no model change affects them. For names, this model scored 19/20 on Indian names and matches kaapi-guardrails' production validator |
+| Faces padded 30% | Haar returns a tight box | Haar boxes hug eyes and nose and clip chin, hair and ears. The first run left a recognisable sliver of face visible |
+| Clean images copied through | Writing only redacted files is less work | The output folder stays a complete mirror of the input, so a downstream consumer never silently loses a file |
+
+Two caveats on reading the numbers: entity **counts** move on both misses
+and false positives, so compare entity *types* and look at the images.
+And visual detection does false-positive — QR detection fires on some
+dense text blocks, Haar finds a phantom second face on one card. Both
+over-redact regions that were PII anyway, which is the right trade here.
+
 ## Indian entity support
 
 Presidio ships India-specific recognizers but **registers none of them
