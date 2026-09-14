@@ -623,3 +623,47 @@ counts. Each error moved the headline by roughly ten points in whichever
 direction the last correction pointed. The number is only ever as good as
 the definition behind it, and the definition deserves as much scrutiny as
 the code.
+
+---
+
+## 2026-09-14 — Parallel preprocessing variants, unioned; duplicate analysis removed
+
+**Status:** Active
+
+`process_image` now OCRs three preprocessed copies of each image — plain
+RGB, greyscale, and CLAHE+Otsu — concurrently with the face/QR detectors,
+and unions the resulting boxes. `--single-variant` disables it.
+
+**Why:** no single preprocessing wins on every document, and the failures
+land on opposite documents. RGB recovers nothing from a photographed
+laptop screen (0 of 5); CLAHE+Otsu fixes that screen but destroys the
+coloured gradient on a PAN card (0 of 4). Items recovered of 77: RGB 66,
+greyscale 67, CLAHE+Otsu 63, **union 71**.
+
+This was nearly a self-inflicted regression. The plan had been to *swap*
+to the enhanced path, which would have taken the Aadhaar and PAN cards
+from 7 recovered items to 1 — the highest-value documents in the set,
+broken by a change that would have been described as a fix. The union
+came from the user asking whether this meant parallel paths and merging.
+
+**Boxes are now drawn directly** rather than via
+`ImageRedactorEngine.redact()`, which re-ran the entire OCR and analysis
+pass a second time — 7.6s of a 17.4s run. Drawing directly also keeps
+output in colour, which the greyscale variants would otherwise have
+destroyed.
+
+**Threads, not processes:** pytesseract shells out and releases the GIL.
+Verified byte-identical results threaded versus serial across all 20
+images before adopting, since silent intermittent divergence would be the
+worst possible failure here.
+
+**Result:** Tesseract with the union scores **87.0% – 98.7%** with a
+single confirmed leak, beating single-variant Paddle (85.7% – 97.4%, two
+leaks) at a tenth of the runtime. The remaining leak is the multi-line
+address on the driving licence — a span-merging problem, not a reading
+one.
+
+**Cost, and a caveat:** without medical NER the union adds 6% (22.9s →
+24.2s for 20 images). With `--medical-ner` it adds 44% (32.9s → 47.5s),
+because the transformer model is compute-bound in-process and runs once
+per variant. It should run once per image instead; that is not yet fixed.

@@ -24,6 +24,7 @@ import platform
 import shutil
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -265,11 +266,13 @@ def process_image(
     visual_pii: bool = True,
     use_pyzbar: bool = False,
     use_wechat: bool = False,
+    variant_union: bool = True,
 ) -> ImageResult:
     from PIL import Image
 
     from image_hygiene import sanitize_for_processing, save_clean
-    from visual_redaction import detect_visual_pii, redact_regions
+    from ocr_backends import build_ocr_variants
+    from visual_redaction import VisualRegion, detect_visual_pii, redact_regions
 
     analyzer_kwargs = analyzer_kwargs or {}
     start = time.monotonic()
@@ -289,18 +292,28 @@ def process_image(
         )
 
     factor = resolve_upscale_factor(image.width, upscale)
-    ocr_image = (
-        image
-        if factor == 1
-        else image.resize(
-            (image.width * factor, image.height * factor), Image.LANCZOS
-        )
-    )
+    variants = build_ocr_variants(image, factor, union=variant_union)
 
+    # Text variants and the visual detectors are independent, so they run
+    # concurrently. Threads, not processes: pytesseract shells out and
+    # releases the GIL, and a shared AnalyzerEngine was verified to give
+    # byte-identical results threaded vs serial across the sample set.
     try:
-        analyzer_results = analyzer.analyze(ocr_image, **analyzer_kwargs)
+        with ThreadPoolExecutor(max_workers=len(variants) + 1) as pool:
+            text_jobs = [
+                pool.submit(analyzer.analyze, v, **analyzer_kwargs) for v in variants
+            ]
+            visual_job = (
+                pool.submit(
+                    detect_visual_pii, image, True, True, use_pyzbar, use_wechat
+                )
+                if visual_pii
+                else None
+            )
+            per_variant = [job.result() for job in text_jobs]
+            regions = visual_job.result() if visual_job else []
     except Exception as exc:
-        logger.exception("OCR/analysis failed for %s", path.name)
+        logger.exception("Analysis failed for %s", path.name)
         return ImageResult(
             filename=path.name,
             status="failed",
@@ -309,31 +322,36 @@ def process_image(
             upscale_factor=factor,
         )
 
-    regions = []
-    if visual_pii:
-        try:
-            regions = detect_visual_pii(
-                image, use_pyzbar=use_pyzbar, use_wechat=use_wechat
+    # Union the variants. A box found by any variant counts; duplicates
+    # cost nothing, since overlapping black rectangles are identical.
+    seen: set[tuple] = set()
+    text_boxes: list[VisualRegion] = []
+    entities: dict[str, int] = {}
+    scores: list[float] = []
+    for results in per_variant:
+        for r in results:
+            box = (
+                r.entity_type,
+                r.left // factor,
+                r.top // factor,
+                r.width // factor,
+                r.height // factor,
             )
-        except Exception:
-            logger.exception("Visual PII detection failed for %s", path.name)
+            if box in seen:
+                continue
+            seen.add(box)
+            entities[r.entity_type] = entities.get(r.entity_type, 0) + 1
+            scores.append(r.score)
+            text_boxes.append(VisualRegion("text", *box[1:]))
+
     visual_counts: dict[str, int] = {}
     for r in regions:
         visual_counts[r.kind] = visual_counts.get(r.kind, 0) + 1
     decodable = [r.kind for r in regions if r.decoded_payload]
 
-    entities: dict[str, int] = {}
-    scores: list[float] = []
-    for result in analyzer_results:
-        entities[result.entity_type] = entities.get(result.entity_type, 0) + 1
-        scores.append(result.score)
-
-    if not analyzer_results and not regions:
-        # Copy through unchanged so the output folder stays a complete mirror
-        # of the input — a consumer of that folder must not silently lose files.
+    if not text_boxes and not regions:
         logger.info(
-            "[yellow]%s[/yellow]: no PII entities detected (copied through)",
-            path.name,
+            "[yellow]%s[/yellow]: no PII detected (copied through)", path.name
         )
         try:
             save_clean(image, output_dir / path.name)
@@ -353,19 +371,13 @@ def process_image(
             upscale_factor=factor,
         )
 
+    # Boxes are drawn here rather than by ImageRedactorEngine.redact(),
+    # which would re-run the whole OCR and analysis pass a second time —
+    # measured at 7.6s of a 17.4s run. Drawing directly also keeps the
+    # output in colour, since the enhanced variants are greyscale.
     try:
-        if analyzer_results:
-            redacted_image = redactor.redact(
-                ocr_image, fill=(0, 0, 0), **analyzer_kwargs
-            )
-            if factor != 1:
-                redacted_image = redacted_image.resize(image.size, Image.LANCZOS)
-        else:
-            redacted_image = image
-        if regions:
-            redacted_image = redact_regions(redacted_image, regions)
-        output_path = output_dir / path.name
-        save_clean(redacted_image, output_path)
+        redacted_image = redact_regions(image, text_boxes + regions)
+        save_clean(redacted_image, output_dir / path.name)
     except Exception as exc:
         logger.exception("Redaction/save failed for %s", path.name)
         return ImageResult(
@@ -385,7 +397,7 @@ def process_image(
     logger.info(
         "[green]%s[/green]: redacted %d entities (%s)%s%s in %.2fs",
         path.name,
-        len(analyzer_results),
+        len(text_boxes),
         ", ".join(sorted(entities)) or "none",
         visual_note,
         f" [dim]@{factor}x[/dim]" if factor != 1 else "",
@@ -395,7 +407,7 @@ def process_image(
         filename=path.name,
         status="processed",
         entities=entities,
-        entity_count=len(analyzer_results),
+        entity_count=len(text_boxes),
         avg_confidence=round(sum(scores) / len(scores), 3) if scores else None,
         duration_seconds=duration,
         upscale_factor=factor,
@@ -493,6 +505,17 @@ def main() -> None:
             "default: without it, some segmentation modes emit every label "
             "before every value, stranding context words from the values they "
             "label and silently disabling context-scored recognizers"
+        ),
+    )
+    parser.add_argument(
+        "--single-variant",
+        dest="variant_union",
+        action="store_false",
+        help=(
+            "OCR only the plain upscaled image. By default three "
+            "preprocessed variants (rgb, greyscale, CLAHE+Otsu) are OCR'd in "
+            "parallel and their boxes unioned, because no single one wins on "
+            "every document"
         ),
     )
     parser.add_argument(
@@ -614,6 +637,7 @@ def main() -> None:
         "psm": args.psm,
         "medical_ner": args.medical_ner,
         "reading_order": args.reading_order,
+        "variant_union": args.variant_union,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -670,6 +694,7 @@ def main() -> None:
                 args.visual_pii,
                 args.pyzbar,
                 args.wechat_qr,
+                args.variant_union,
             )
             results.append(result)
             progress.advance(task)
