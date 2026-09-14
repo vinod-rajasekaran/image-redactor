@@ -1306,3 +1306,81 @@ and safe only while nothing downstream references those commits. Once
 pushed it is a forced update that breaks every clone, to reclaim space
 that a single `git clone --depth 1` already avoids. The working tree is
 14MB either way.
+
+---
+
+## 2026-09-15 — A 50-document photoreal corpus, and 79.0%
+
+**Status:** Active — `generate_openai_documents.py`, `datasets/generated/`
+
+Fifty photoreal Indian documents across eight types, rendered by
+`gpt-image-2` from values drawn by the new `redactor/synth.py`, verified
+by Claude, and **never tuned against**. 224 ground-truth items, three
+times the `documents/` corpus.
+
+**Result: 79.0% redacted — 177 of 224, 47 leaks.** Against 93.5% on
+`documents/`. That gap is the honest size of the home-field advantage:
+half of `documents/` was drawn by this project, and the label set was
+revised three times while looking at it.
+
+| field | n | redacted |
+|---|---:|---:|
+| every structured identifier (Aadhaar, PAN, DL, account, IFSC, phone, email, DOB, survey, registration) | 117 | **100%** |
+| address | 37 | 76% |
+| person name | 50 | 60% |
+| medical record no. | 6 | 50% |
+| doctor name | 6 | 33% |
+| FIR number | 6 | 17% (no recognizer) |
+| diagnosis | 6 | 0% (no recognizer) |
+
+Excluding the 12 items nothing here claims to detect: **83.0%** (176/212).
+
+**The finding: the regex layer is solid and the NER layer is not.** Every
+recognizer written for this project held at 100% on unseen documents —
+including the land and survey recognizers added blind, without knowing the
+formats. What fails is names: **20 of 47 leaks are a person's name** that
+spaCy missed once glare, perspective and a form grid were in the way.
+`documents/`'s printed half is clean enough for NER to succeed, so this
+was invisible there.
+
+**Why the ground truth is what was rendered, not what was asked for.** An
+image model can drop digits and invent text, and cannot say where it put
+anything. So each finished page is read back by Claude and the annotation
+records *that*; where it differs, the request is kept under `requested`.
+The verifier is deliberately a different vendor from the generator,
+because a model grading its own output can confirm a value it
+hallucinated. As it turned out `gpt-image-2` altered **none** of the 224
+values — which is a measurement rather than a lucky assumption precisely
+because the read-back happened.
+
+**No bounding boxes**, though an image generator would normally be the one
+source that could provide them: here it cannot, and vision-derived boxes
+were already measured at about a text row off and the metric built on them
+removed. This corpus scores by legibility.
+
+**Two bugs caught before spending on 50 images:**
+
+- The verifier counted the grey portrait *silhouette* as a face. That
+  would have written a permanent `face: 1` into every ID-card annotation
+  for something YuNet cannot detect — a failure no tool could ever pass.
+- Verdicts were matched to fields by printed label, which differs per
+  template ("Name" / "Patient Name" / "Account Holder"). Now keyed on the
+  category.
+
+**And one in the analysis, which is the recurring lesson.** The first
+per-field breakdown reported 0 leaks in every field — while the scorer it
+was reading had just reported 47. The join looked for a `verdicts` list;
+the file is a flat `{value: verdict}` map, so every lookup missed and
+every field showed 100%. A clean, plausible, entirely wrong table. It was
+caught only because a total contradicted a number from two minutes
+earlier.
+
+**Stored as JPEG q95**: 126MB of PNG to 28MB. Sound here for the reason it
+was not for the cheques' source PNGs — no measurement predated the
+encoding, so the stored file simply *is* the corpus. A photographed
+document arrives as a JPEG anyway.
+
+**Cost:** ~$3.50 in image generation, 50 Claude vision calls. The script
+prints an estimate and asks before spending, is resumable so a crash never
+pays twice, and `--verify-existing` re-runs the read-back without
+redrawing anything.

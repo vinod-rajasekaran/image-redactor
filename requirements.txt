@@ -26,3 +26,8 @@ torch
 # Optional, vision_score.py only: scores redacted output with Claude vision
 # instead of OCR. Needs ANTHROPIC_API_KEY in .env
 anthropic
+
+# Optional, generate_openai_documents.py only: renders photoreal synthetic
+# documents. Needs OPENAI_API_KEY in .env. Claude still does the read-back,
+# so the generator never grades its own output.
+openai

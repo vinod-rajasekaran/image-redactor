@@ -22,6 +22,12 @@ redacted output to Claude and asking what remains readable.
 All five leaks are **partial coverage**: the entity was found, the box did
 not cover all of it.
 
+**On 50 documents this project had never seen, it scores 79.0%** — 177 of
+224 items, vision-scored. `datasets/generated/` is photoreal Indian
+paperwork rendered by `gpt-image-2` from randomised values, across eight
+document types. The gap is the honest measure of how much the 93.5%
+owes to a corpus half of which this project drew itself.
+
 **That number does not generalise, and we can prove it.** On 10 synthetic
 Indian cheques from an unrelated dataset, **not one of 30 PII regions is
 fully covered** — mean coverage 20% for account numbers, 46% for payee
@@ -57,6 +63,7 @@ cp .env.example .env    # then fill in ANTHROPIC_API_KEY
 source venv/bin/activate
 
 python generate_test_images.py          # 10 synthetic Indian documents (optional)
+python generate_openai_documents.py --count 50   # 50 photoreal ones (needs OPENAI_API_KEY)
 python build_ground_truth.py            # -> datasets/documents/annotations.json
 python evaluate_redactor.py --input datasets/documents/images
 
@@ -238,6 +245,37 @@ Measured before the union and block merging, which lifted Tesseract past
 Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
 models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
 they share a model lineage was wrong.
+
+**Photoreal documents** — 50 pages, 224 items, eight document types,
+rendered by `gpt-image-2` from randomised values and never tuned against.
+Vision-scored: **79.0% redacted, 47 leaks.**
+
+```bash
+python generate_openai_documents.py --count 50
+python evaluate_redactor.py --input datasets/generated/images --run-name generated
+REDACTOR_CORPUS=generated python vision_score.py runs/generated
+```
+
+The failures are not spread evenly — every structured identifier holds,
+and everything that needs a name model or has no recognizer at all falls
+over:
+
+| field | n | redacted | |
+|---|---:|---:|---|
+| Aadhaar, PAN, DL, account, IFSC, phone, email, DOB, survey, registration | 117 | **100%** | regex + checksum |
+| address | 37 | 76% | spaCy `LOCATION` |
+| person name | 50 | 60% | spaCy `PERSON` |
+| medical record no. | 6 | 50% | context-anchored |
+| doctor name | 6 | 33% | spaCy `PERSON` |
+| FIR number | 6 | 17% | **no recognizer** |
+| diagnosis | 6 | 0% | **no recognizer** (`--medical-ner` is off) |
+
+Excluding the 12 items nothing here claims to detect, it is **83.0%**
+(176/212). The remaining gap is almost entirely **names on photographed
+pages** — 20 of the 47 leaks are a person's name that spaCy did not find
+once glare, perspective and a form grid were in the way. That is the
+single highest-value thing left to fix, and it was invisible on
+`documents/`, where the printed half is clean enough for NER to succeed.
 
 **Cheques** — 10 synthetic Indian cheques
 ([`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images),

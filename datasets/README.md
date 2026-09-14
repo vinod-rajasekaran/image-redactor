@@ -15,6 +15,7 @@ is where a script reads it from.
 | corpus | n | tracked | annotation | provenance | licence |
 |---|---:|---|---|---|---|
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic |
+| `generated/` | 50 | yes | text | `generate_openai_documents.py` — values from `redactor/synth.py`, rendered by `gpt-image-2`, read back by Claude | fully synthetic |
 | `pack/` | 20 | yes | box | `generate_synthetic_indian_pii_images.py` — pack authored with Claude, generated locally | fully synthetic |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
 | `text/` | 2 files, 2.2MB | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
@@ -37,13 +38,33 @@ Images 11–20 *imitate* photographed pages — perspective, glare, low
 contrast — and the notes elsewhere call them photographs for that reason.
 That is rendered appearance, not a camera: they are the hardest images
 here precisely because a generator was asked to make them look shot in
-poor light.
+poor light. `generated/` is that same idea done deliberately and at scale:
+50 photoreal pages, 224 ground-truth items, three times the `documents/`
+corpus.
+
+**`generated/` records what the model rendered, not what was requested.**
+An image model can drop digits and invent text, so the annotation is built
+by reading each finished page back with Claude — a different vendor from
+the one that drew it, because a model grading its own output can confirm a
+value it hallucinated. Where the two differ the request is kept alongside
+under `requested`. In practice `gpt-image-2` altered **none** of the 224
+values, which is a measurement rather than an assumption precisely because
+the read-back happened. Entries whose notes say `UNVERIFIED` were never
+read back and their `text` is a claim; `python generate_openai_documents.py
+--verify-existing` fixes them without paying to redraw the images.
+
+These pages imitate official Indian document layouts — the emblem, the
+banding, the seal. That is the point of a redaction test set, and every
+person, number and address on them is fabricated. They are mockups for
+testing a privacy tool, and nothing here is or should be presented as an
+issued record.
 
 ## Size, and what stays out
 
 All three image corpora are committed, so every image figure in
 `DECISIONS.md` reproduces from a clone with no downloads. `documents/` and
-`pack/` cost 3.6MB together. `cheques/` costs 14MB for 10 images:
+`pack/` cost 3.6MB together, `generated/` 28MB for 50 photoreal pages,
+and `cheques/` 14MB for 10:
 
 - the source PNGs are 2365×1065 with paper texture and ~138k unique
   colours, so PNG had almost nothing to remove — 4.4MB each, 44MB total

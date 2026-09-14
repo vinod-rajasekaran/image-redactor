@@ -78,6 +78,9 @@ documents), five confirmed leaks, all partial-coverage failures.
   reasons.
 - `hygiene.py`, `runs.py`, `vision.py` — metadata stripping, run folders,
   shared Claude client.
+- `synth.py` — fake Indian field *values*, with no renderer attached. Both
+  document generators draw from it, so a flat Pillow page and a photoreal
+  one carry identical values and one ground truth serves both.
 
 `datasets/` holds every validation corpus — images and annotations
 together, one schema, loaded through `redactor.datasets.load(name)`.
@@ -130,6 +133,16 @@ Re-score after changing OCR backend or PSM.
 **Entity counts are a bad metric.** Both misses and false positives move
 them. Two Paddle bugs looked like improvements by that measure. Score
 leakage instead.
+
+**An image model's ground truth is what it rendered, never what you asked
+for.** `generate_openai_documents.py` prompts for specific values, then has
+Claude read the page back and records *that*. Trusting the prompt would
+produce a corpus scored against text no image contains. Two rules hold it
+together: the verifier is a different vendor from the generator, so a
+hallucinated value cannot be confirmed by the model that invented it; and
+a grey portrait silhouette must be counted as `face: 0`, because a face
+detector cannot find a silhouette and recording one manufactures a
+failure no tool could ever pass.
 
 ## Measurement — the thing this project keeps getting wrong
 
