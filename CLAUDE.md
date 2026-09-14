@@ -18,11 +18,16 @@ ImageRedactorEngine). Entirely local, no cloud calls. Design spec:
   Paddle returns *line* boxes, so `_split_line_into_words()` divides
   them across words by character count; without that, one PII word
   blacks out its whole line.
-- `visual_redaction.py` — faces (Haar) and QR/barcodes. Detection is
-  deliberately preferred over decoding: pyzbar decoded none of the
-  sample QR codes, but `cv2.QRCodeDetector` located them, which is all
-  redaction needs. `PAD_RATIO` pads faces 30% because Haar boxes clip
-  chin/hair and leave a recognisable sliver.
+- `visual_redaction.py` — faces (Haar), QR (`cv2.QRCodeDetector`) and
+  1-D barcodes (`cv2.barcode.BarcodeDetector`). On by default;
+  `--no-visual-pii` disables. **Always locate with `detect()`, never
+  with `detectAndDecode()`** — the latter returns no boxes for codes it
+  cannot read, which silently skips exactly the unreadable codes that
+  most need blacking out. This bug was actually shipped once and caught
+  only because the water-bill barcode count stayed 0. pyzbar is opt-in
+  (`--pyzbar`) for payloads only; it decoded nothing in the sample set
+  and needs the `zbar` system lib. `PAD_RATIO` pads faces 30% because
+  Haar boxes clip chin/hair and leave a recognisable sliver.
 - `runs/<name>/` — each run writes `config.json` (inputs),
   `summary.json` (config + results), `run.log`, `images/`. Gitignored:
   may contain real PII.

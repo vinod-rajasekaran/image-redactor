@@ -49,7 +49,8 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 | `--runs-dir` | `runs` | Parent folder; each run gets its own subfolder |
 | `--run-name` | timestamp + settings | Name for this run's folder |
 | `--ocr` | `tesseract` | OCR backend: `tesseract` or `paddle` |
-| `--visual-pii` | off | Also redact faces and QR/barcodes (OpenCV + pyzbar) |
+| `--no-visual-pii` | off | Skip face and QR/barcode redaction (on by default) |
+| `--pyzbar` | off | Also decode code payloads with pyzbar (needs `zbar`) |
 | `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
 | `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
@@ -189,18 +190,30 @@ the **photo** and the **QR code** fully intact. An Aadhaar QR encodes
 the holder's name, DOB and address, so a card redacted this way is not
 meaningfully redacted.
 
-`--visual-pii` closes this gap (see `visual_redaction.py`): OpenCV Haar
-cascades for faces, `cv2.QRCodeDetector` for QR regions, pyzbar for
-barcodes. Two notes from building it:
+This is closed by default (see `visual_redaction.py`), using OpenCV only:
+Haar cascades for faces, `cv2.QRCodeDetector` for QR, and
+`cv2.barcode.BarcodeDetector` for 1-D barcodes. `--no-visual-pii` turns
+it off. Three notes from building it:
 
-- **Detection matters more than decoding.** pyzbar decoded none of the
-  QR codes in the sample set — decorative or low-resolution codes are
-  exactly the ones it refuses — but `cv2.QRCodeDetector` still *located*
-  them, which is all redaction needs. Relying on decode alone would have
-  redacted nothing.
+- **Detection matters more than decoding.** pyzbar decoded *none* of the
+  codes in the sample set — decorative and low-resolution codes are
+  exactly the ones a decoder refuses — while the OpenCV detectors
+  located every one, including a barcode pyzbar missed entirely. The
+  same trap exists inside OpenCV: `BarcodeDetector.detectAndDecode()`
+  returns no boxes for a code it cannot read, so the code calls
+  `detect()` for regions and treats decoding as an optional extra.
 - **Haar face boxes are too tight.** They hug the eyes and nose and clip
   chin, hair and ears, leaving a recognisable sliver. Faces are padded
   30% (`PAD_RATIO`); don't reduce that without looking at the output.
+- **There are false positives.** QR detection fires on a couple of dense
+  text blocks in the synthetic documents, and Haar finds a second "face"
+  on one card. Both over-redact regions that were PII anyway, which is
+  the right trade for a redaction tool, but don't read the counts as
+  precision measurements.
+
+`--pyzbar` additionally runs pyzbar to record decoded payloads. It is
+off by default: it adds nothing to detection, and it needs the `zbar`
+system library.
 
 **6. Cropped or truncated values defeat pattern recognizers.** A PAN
 visible only as `DE1234F` (rather than the full `ABCDE1234F`) does not

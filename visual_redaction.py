@@ -47,44 +47,77 @@ def detect_faces(image: Image.Image) -> list[VisualRegion]:
     return regions
 
 
-def detect_codes(image: Image.Image) -> list[VisualRegion]:
-    """Locate QR codes and barcodes.
+def _regions_from_points(points, kind: str, size, payloads=None) -> list[VisualRegion]:
+    regions: list[VisualRegion] = []
+    if points is None:
+        return regions
+    for i, quad in enumerate(np.array(points).reshape(-1, 4, 2)):
+        xs, ys = quad[:, 0], quad[:, 1]
+        x, y = int(xs.min()), int(ys.min())
+        w, h = int(xs.max() - xs.min()), int(ys.max() - ys.min())
+        x, y, w, h = _clamp_box(x, y, w, h, size)
+        if w <= 0 or h <= 0:
+            continue
+        payload = None
+        if payloads is not None and i < len(payloads) and payloads[i]:
+            payload = str(payloads[i])
+        regions.append(VisualRegion(kind, x, y, w, h, payload))
+    return regions
 
-    Detection matters more than decoding here: a decorative, damaged or
-    low-resolution code still leaks nothing once it is blacked out, and
-    pyzbar refuses to decode exactly those. OpenCV locates QR patterns
-    without needing to read them; pyzbar adds 1-D barcodes and tells us
-    when a payload was actually readable.
+
+def detect_codes(image: Image.Image, use_pyzbar: bool = False) -> list[VisualRegion]:
+    """Locate QR codes and barcodes, preferring detection over decoding.
+
+    A decorative, damaged or low-resolution code leaks nothing once it is
+    blacked out — and those are exactly the ones a decoder refuses to read.
+    So the primary path is OpenCV's *detectors*, which locate a code without
+    decoding it: QRCodeDetector for QR, barcode.BarcodeDetector for 1-D.
+    Measured on the sample set, pyzbar decoded nothing at all, while these
+    located every code present including a barcode pyzbar missed entirely.
+
+    pyzbar remains an opt-in supplement: when a code really is decodable its
+    payload is worth recording, since a readable Aadhaar QR carries the
+    holder's name, DOB and address.
     """
     regions: list[VisualRegion] = []
     rgb = np.array(image.convert("RGB"))
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
 
-    detector = cv2.QRCodeDetector()
-    ok, points = detector.detectMulti(gray)
+    qr = cv2.QRCodeDetector()
+    ok, points = qr.detectMulti(gray)
     if not ok:
-        ok, points = detector.detect(gray)
-    if ok and points is not None:
-        for quad in np.array(points).reshape(-1, 4, 2):
-            xs, ys = quad[:, 0], quad[:, 1]
-            x, y = int(xs.min()), int(ys.min())
-            w, h = int(xs.max() - xs.min()), int(ys.max() - ys.min())
-            x, y, w, h = _clamp_box(x, y, w, h, image.size)
-            if w > 0 and h > 0:
-                regions.append(VisualRegion("qr_code", x, y, w, h))
+        ok, points = qr.detect(gray)
+    if ok:
+        regions += _regions_from_points(points, "qr_code", image.size)
 
-    try:
-        from pyzbar import pyzbar
+    if hasattr(cv2, "barcode"):
+        bar = cv2.barcode.BarcodeDetector()
+        # Locate first, decode second. detectAndDecode returns *no boxes* for a
+        # barcode it cannot read, which would silently skip exactly the
+        # unreadable codes we most need to black out.
+        found, bar_points = bar.detect(rgb)
+        if found:
+            payloads = None
+            try:
+                decoded, _types, _pts = bar.detectAndDecode(rgb)
+                payloads = decoded or None
+            except Exception:
+                payloads = None
+            regions += _regions_from_points(bar_points, "barcode", image.size, payloads)
 
-        for code in pyzbar.decode(image):
-            r = code.rect
-            x, y, w, h = _clamp_box(r.left, r.top, r.width, r.height, image.size)
-            kind = "qr_code" if code.type == "QRCODE" else "barcode"
-            regions.append(
-                VisualRegion(kind, x, y, w, h, code.data.decode("utf-8", "replace"))
-            )
-    except ImportError:
-        pass
+    if use_pyzbar:
+        try:
+            from pyzbar import pyzbar
+
+            for code in pyzbar.decode(image):
+                r = code.rect
+                x, y, w, h = _clamp_box(r.left, r.top, r.width, r.height, image.size)
+                kind = "qr_code" if code.type == "QRCODE" else "barcode"
+                regions.append(
+                    VisualRegion(kind, x, y, w, h, code.data.decode("utf-8", "replace"))
+                )
+        except ImportError:
+            pass
 
     return _deduplicate(regions)
 
@@ -106,13 +139,16 @@ def _deduplicate(regions: list[VisualRegion]) -> list[VisualRegion]:
 
 
 def detect_visual_pii(
-    image: Image.Image, faces: bool = True, codes: bool = True
+    image: Image.Image,
+    faces: bool = True,
+    codes: bool = True,
+    use_pyzbar: bool = False,
 ) -> list[VisualRegion]:
     regions: list[VisualRegion] = []
     if faces:
         regions += detect_faces(image)
     if codes:
-        regions += detect_codes(image)
+        regions += detect_codes(image, use_pyzbar=use_pyzbar)
     return regions
 
 

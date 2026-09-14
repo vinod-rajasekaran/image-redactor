@@ -5,8 +5,12 @@ Pillow
 spacy
 rich
 
-# Visual PII (--visual-pii): faces and QR/barcodes
-opencv-python
+# Visual PII (on by default): faces, QR and 1-D barcodes. opencv-contrib
+# provides cv2.barcode; plain opencv-python lacks it.
+opencv-contrib-python
+
+# Optional, --pyzbar only: decodes code payloads. Adds nothing to detection
+# and needs the zbar system library (brew install zbar).
 pyzbar
 
 # Alternative OCR backend (--ocr paddle). Large (~500MB) and CPU-slow,

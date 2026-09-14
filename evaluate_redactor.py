@@ -237,7 +237,8 @@ def process_image(
     logger: logging.Logger,
     analyzer_kwargs: dict | None = None,
     upscale: str = "auto",
-    visual_pii: bool = False,
+    visual_pii: bool = True,
+    use_pyzbar: bool = False,
 ) -> ImageResult:
     from PIL import Image
 
@@ -281,7 +282,7 @@ def process_image(
     regions = []
     if visual_pii:
         try:
-            regions = detect_visual_pii(image)
+            regions = detect_visual_pii(image, use_pyzbar=use_pyzbar)
         except Exception:
             logger.exception("Visual PII detection failed for %s", path.name)
     visual_counts: dict[str, int] = {}
@@ -440,10 +441,25 @@ def main() -> None:
         help="OCR backend (default: tesseract)",
     )
     parser.add_argument(
-        "--visual-pii",
-        action="store_true",
-        help="Also detect and redact faces and QR/barcodes (OpenCV + pyzbar)",
+        "--no-visual-pii",
+        dest="visual_pii",
+        action="store_false",
+        help=(
+            "Skip face and QR/barcode redaction. On by default: Presidio "
+            "redacts only OCR'd text, and an intact Aadhaar QR still carries "
+            "the holder's name, DOB and address"
+        ),
     )
+    parser.add_argument(
+        "--pyzbar",
+        action="store_true",
+        help=(
+            "Additionally run pyzbar to decode code payloads. Off by default: "
+            "OpenCV's detectors locate codes pyzbar cannot decode, and pyzbar "
+            "needs the zbar system library"
+        ),
+    )
+    parser.set_defaults(visual_pii=True)
     parser.add_argument(
         "--threshold",
         type=float,
@@ -522,6 +538,7 @@ def main() -> None:
         "image_count": len(image_paths),
         "ocr_backend": args.ocr,
         "visual_pii": args.visual_pii,
+        "pyzbar": args.pyzbar,
         "score_threshold": args.threshold,
         "entities": args.entities or "all_supported",
         "ocr_tolerant_aadhaar": not args.strict_aadhaar,
@@ -570,6 +587,7 @@ def main() -> None:
                 analyzer_kwargs,
                 args.upscale,
                 args.visual_pii,
+                args.pyzbar,
             )
             results.append(result)
             progress.advance(task)
