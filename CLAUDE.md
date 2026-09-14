@@ -34,13 +34,39 @@ ImageRedactorEngine). Entirely local, no cloud calls. Design spec:
   `python -m spacy download en_core_web_lg` (large, ~400MB — not a pip
   dependency in requirements.txt).
 
-## Known limitation
+## Indian entities — read before changing detection
 
-Presidio's default recognizers don't cover Aadhaar/PAN number formats
-(they're US/UK-pattern-based) — see README's "Known limitation"
-section before extending this. If asked to close that gap, the fix is
-custom `PatternRecognizer`s registered on the `AnalyzerEngine` inside
-`build_engines()` in `evaluate_redactor.py`, not a new pipeline stage.
+Presidio ships India recognizers but registers **none** by default;
+`build_engines()` adds all six (`INDIA_RECOGNIZER_NAMES`). Key facts,
+all verified empirically — see README "Findings from evaluation" for
+detail:
+
+- Aadhaar/PAN/Voter are **regex + checksum**, not NER. Swapping the
+  spaCy model does nothing for them. Don't accept "use a better NER
+  model for Aadhaar" as a premise. `en_core_web_lg` scored 19/20 on
+  Indian names and matches kaapi-guardrails' production validator —
+  keep it unless there's evidence-backed reason to change.
+- `InAadhaarRecognizer` drops (not down-scores) checksum failures, so
+  OCR digit errors silently un-redact real Aadhaars. Hence the
+  `build_aadhaar_ocr_fallback_recognizer()` fallback, on by default,
+  disabled with `--strict-aadhaar`.
+- That fallback intentionally has **no look-around guards**. Guards
+  were tried and broke real detections, because OCR flattens the page
+  and destroys field boundaries. Don't "tighten" the regex without
+  re-running the test set — specifically
+  `04_hospital_admission_report.png`, whose Aadhaar is deliberately
+  checksum-invalid and is the regression canary for this.
+- Test-image Aadhaar numbers must be Verhoeff-valid (except 04's
+  deliberate one). Generate a valid one by brute-forcing the last
+  digit against `InAadhaarRecognizer().validate_result()`.
+
+## Aligning with kaapi-guardrails
+
+Sibling project `ProjectTech4DevAI/kaapi-guardrails` has a
+`pii_remover` validator on the same Presidio + `en_core_web_lg` stack.
+`--threshold` / `--entities` mirror its `threshold` / `entity_types`
+config deliberately — keep them compatible so this harness can
+evaluate that validator's real settings.
 
 ## Conventions
 

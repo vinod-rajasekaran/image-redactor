@@ -108,7 +108,7 @@ DOCUMENTS = [
             ("Name", "Rajesh Kumar Sharma"),
             ("DOB", "14/03/1985"),
             ("Gender", "Male"),
-            ("Aadhaar No.", "4521 8734 9012"),
+            ("Aadhaar No.", "4521 8734 9015"),
             ("Address", "12, MG Road, Andheri West,"),
             ("", "Mumbai, Maharashtra - 400058"),
             ("Mobile", "+91 98765 43210"),
@@ -136,7 +136,8 @@ DOCUMENTS = [
             ("Phone", "+91 90123 45678"),
             ("Address", "45, Jubilee Hills, Hyderabad,"),
             ("", "Telangana - 500033"),
-            ("Aadhaar Ref.", "3412 6690 8821"),
+            ("Aadhaar Ref.", "3412 6690 8820"),
+            ("Passport No.", "P4521876"),
             ("Position Applied", "Senior Software Engineer"),
             ("Current CTC", "Rs. 18,50,000 per annum"),
         ],
@@ -150,6 +151,9 @@ DOCUMENTS = [
             ("Age / Sex", "52 / Male"),
             ("Address", "78, Park Street, Kolkata - 700016"),
             ("Phone", "+91 91234 56789"),
+            # Deliberately checksum-invalid, simulating an OCR digit error:
+            # stock Presidio drops this, the OCR-tolerant fallback catches it.
+            ("Aadhaar No.", "4521 8734 9012"),
             ("Admission Date", "03/09/2026"),
             ("Diagnosis", "Type 2 Diabetes Mellitus, Hypertension"),
             ("Admitting Doctor", "Dr. Kavitha Nair"),
@@ -199,6 +203,7 @@ DOCUMENTS = [
             ("", "Bengaluru, Karnataka - 560038"),
             ("Valid Till", "04/11/2045"),
             ("Blood Group", "O+"),
+            ("Vehicle Registration", "KA05MJ4521"),
         ],
     ),
     dict(

@@ -103,13 +103,87 @@ def check_prerequisites(logger: logging.Logger) -> None:
         sys.exit(1)
 
 
-def build_engines():
-    """Construct Presidio's image analyzer + redactor engines."""
+def build_aadhaar_ocr_fallback_recognizer():
+    """A checksum-free IN_AADHAAR recognizer for OCR-garbled numbers.
+
+    Presidio's InAadhaarRecognizer validates a Verhoeff checksum and DROPS
+    the match outright when it fails — so a single OCR digit error means a
+    real Aadhaar number is not redacted at all.
+
+    The grouped 4-4-4 form scores high enough to fire on its own, because
+    OCR of a two-column form emits every label before every value, which
+    strands the "Aadhaar" context word far from its number and makes
+    context-based scoring unreliable.
+
+    It deliberately carries no look-around guards against matching inside a
+    longer digit run. OCR flattens the page into one string with no field
+    boundaries, so a neighbouring phone number is indistinguishable from a
+    continuation of the same number, and guards drop real Aadhaars. The
+    cost is that a credit card or account number also matches here; those
+    spans are redacted as CREDIT_CARD/DATE_TIME regardless, so the
+    over-match costs label precision in the report, not redaction quality.
+
+    The ungrouped 12-digit form is weaker and still needs context.
+    """
+    from presidio_analyzer import Pattern, PatternRecognizer
+
+    return PatternRecognizer(
+        supported_entity="IN_AADHAAR",
+        name="AadhaarOcrFallbackRecognizer",
+        patterns=[
+            Pattern(
+                "Aadhaar 4-4-4 grouped (no checksum)",
+                r"\b[0-9]{4}[- :][0-9]{4}[- :][0-9]{4}\b",
+                0.5,
+            ),
+            Pattern("Aadhaar 12-digit (no checksum)", r"\b[0-9]{12}\b", 0.2),
+        ],
+        context=["aadhaar", "aadhar", "uidai", "uid"],
+    )
+
+
+INDIA_RECOGNIZER_NAMES = [
+    "InAadhaarRecognizer",
+    "InPanRecognizer",
+    "InVoterRecognizer",
+    "InPassportRecognizer",
+    "InVehicleRegistrationRecognizer",
+    "InGstinRecognizer",
+]
+
+
+def build_engines(logger: logging.Logger, ocr_tolerant_aadhaar: bool = True):
+    """Construct Presidio's image analyzer + redactor engines.
+
+    Presidio only registers US/UK recognizers by default, so the
+    India-specific ones are added explicitly here.
+    """
+    from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
+    from presidio_analyzer import predefined_recognizers
     from presidio_image_redactor import ImageAnalyzerEngine, ImageRedactorEngine
 
-    analyzer = ImageAnalyzerEngine()
-    redactor = ImageRedactorEngine(image_analyzer_engine=analyzer)
-    return analyzer, redactor
+    registry = RecognizerRegistry()
+    registry.load_predefined_recognizers()
+
+    for name in INDIA_RECOGNIZER_NAMES:
+        registry.add_recognizer(getattr(predefined_recognizers, name)())
+    logger.info(
+        "Registered %d India-specific recognizers: %s",
+        len(INDIA_RECOGNIZER_NAMES),
+        ", ".join(INDIA_RECOGNIZER_NAMES),
+    )
+
+    if ocr_tolerant_aadhaar:
+        registry.add_recognizer(build_aadhaar_ocr_fallback_recognizer())
+        logger.info(
+            "OCR-tolerant Aadhaar fallback enabled "
+            "(catches checksum-invalid numbers near Aadhaar context words)"
+        )
+
+    analyzer_engine = AnalyzerEngine(registry=registry)
+    image_analyzer = ImageAnalyzerEngine(analyzer_engine=analyzer_engine)
+    redactor = ImageRedactorEngine(image_analyzer_engine=image_analyzer)
+    return image_analyzer, redactor
 
 
 def process_image(
@@ -118,9 +192,11 @@ def process_image(
     analyzer,
     redactor,
     logger: logging.Logger,
+    analyzer_kwargs: dict | None = None,
 ) -> ImageResult:
     from PIL import Image
 
+    analyzer_kwargs = analyzer_kwargs or {}
     start = time.monotonic()
     try:
         image = Image.open(path)
@@ -135,7 +211,7 @@ def process_image(
         )
 
     try:
-        analyzer_results = analyzer.analyze(image)
+        analyzer_results = analyzer.analyze(image, **analyzer_kwargs)
     except Exception as exc:
         logger.exception("OCR/analysis failed for %s", path.name)
         return ImageResult(
@@ -160,7 +236,7 @@ def process_image(
         )
 
     try:
-        redacted_image = redactor.redact(image, fill=(0, 0, 0))
+        redacted_image = redactor.redact(image, fill=(0, 0, 0), **analyzer_kwargs)
         output_path = output_dir / path.name
         redacted_image.save(output_path)
     except Exception as exc:
@@ -233,6 +309,26 @@ def main() -> None:
     parser.add_argument(
         "--output", default="output_images", help="Folder to write redacted images to"
     )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Minimum Presidio confidence score to redact (default: 0.5)",
+    )
+    parser.add_argument(
+        "--entities",
+        nargs="+",
+        default=None,
+        help="Restrict detection to these entity types (default: all supported)",
+    )
+    parser.add_argument(
+        "--strict-aadhaar",
+        action="store_true",
+        help=(
+            "Disable the OCR-tolerant Aadhaar fallback, so only numbers with a "
+            "valid Verhoeff checksum are redacted (matches stock Presidio)"
+        ),
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input)
@@ -263,7 +359,18 @@ def main() -> None:
 
     console.rule("[bold blue]Presidio Image Redactor Evaluation")
     logger.info("Loading local OCR + Presidio analyzer engines...")
-    analyzer, redactor = build_engines()
+    analyzer, redactor = build_engines(
+        logger, ocr_tolerant_aadhaar=not args.strict_aadhaar
+    )
+
+    analyzer_kwargs: dict = {"score_threshold": args.threshold}
+    if args.entities:
+        analyzer_kwargs["entities"] = args.entities
+    logger.info(
+        "Score threshold: %.2f | Entities: %s",
+        args.threshold,
+        ", ".join(args.entities) if args.entities else "all supported",
+    )
 
     results: list[ImageResult] = []
     with Progress(
@@ -277,7 +384,9 @@ def main() -> None:
         task = progress.add_task("Processing images", total=len(image_paths))
         for path in image_paths:
             progress.update(task, description=f"Processing [bold]{path.name}[/bold]")
-            result = process_image(path, output_dir, analyzer, redactor, logger)
+            result = process_image(
+                path, output_dir, analyzer, redactor, logger, analyzer_kwargs
+            )
             results.append(result)
             progress.advance(task)
 
@@ -286,6 +395,9 @@ def main() -> None:
     report = {
         "input_dir": str(input_dir),
         "output_dir": str(output_dir),
+        "score_threshold": args.threshold,
+        "entities": args.entities or "all_supported",
+        "ocr_tolerant_aadhaar": not args.strict_aadhaar,
         "total_images": len(results),
         "results": [asdict(r) for r in results],
     }
