@@ -1247,3 +1247,50 @@ loader expects `{"pii": [...]}`. Harmless while the file was gitignored
 and rebuilt every time; a silent licence deletion now that it is tracked.
 It now reads the existing `_meta` back and writes through
 `datasets.save()`.
+
+---
+
+## 2026-09-15 — Cheques stored as JPEG, and the numbers moved
+
+**Status:** Active — supersedes the coverage figures in *Cheque corpus
+trimmed to 10 and committed*, earlier today
+
+44MB of PNG for 10 images was most of the repo. Stored as **JPEG q95 with
+no chroma subsampling** they are 14MB. The same 10 cheques, the same
+boxes — the annotations carried over verbatim, since dimensions are
+unchanged and the boxes are pixel coordinates.
+
+**The figures were re-measured, not carried over, and they moved:**
+
+| field | PNG | JPEG q95 |
+|---|---:|---:|
+| account number | 27% | **20%** |
+| payee name | 37% | **46%** |
+| signature | 51%¹ → 53% | **58%** |
+| fully covered | 2/30 | **0/30** |
+
+¹ the 51% is from the 20-cheque set, kept for continuity.
+
+**This is the finding, and it is not about JPEG.** Re-encoding at q95 is
+invisible to the coverage metric itself — an unredacted re-encode of every
+cheque, scored against its own source, reports **0.00% covered, worst
+region 0.00%**, so not one pixel moved past the 30-unit threshold. Yet the
+same pipeline on the same pages now covers account numbers 7 points worse,
+payee names 9 points better, and fully covers nothing at all. Sub-threshold
+changes no metric here can see are enough to flip what OCR reads and where
+the boxes land.
+
+So cheque performance is not merely low, it is **unstable**: it moves
+under a perturbation small enough to be undetectable. That strengthens
+rather than softens the existing conclusion. The headline stays 93.5% for
+printed forms, and cheques stay the proof it does not generalise.
+
+**Why this is sound here and was not for the source PNGs.** Lossy
+re-encoding is a re-measurement, never a compression — so it is only
+acceptable when you actually re-measure and publish what you get. That was
+done. The alternative, carrying the old numbers across a pixel change,
+would have published figures no image in the repo produces.
+
+**`cheque_benchmark.py --limit N` now writes JPEG too**, so a refetch
+cannot silently rebuild a PNG corpus that scores differently from the
+committed one.

@@ -90,8 +90,15 @@ def fetch(limit: int) -> None:
     regions: dict[str, list[dict]] = {}
 
     for row in rows:
-        name = row["filename"]
-        Image.open(io.BytesIO(row["image"]["bytes"])).save(IMAGE_DIR / name)
+        # Stored as JPEG q95 to match the committed corpus: the source PNGs
+        # are 4.4MB each. Re-encoding is visible to OCR even though it is
+        # invisible to the coverage metric, so a refetch must not quietly
+        # produce a different-format corpus from the one measured.
+        name = Path(row["filename"]).with_suffix(".jpg").name
+        Image.open(io.BytesIO(row["image"]["bytes"])).convert("RGB").save(
+            IMAGE_DIR / name, format="JPEG", quality=95, subsampling=0,
+            optimize=True,
+        )
         items = []
         for field, (entity, tier) in PII_FIELDS.items():
             box = row.get(field)

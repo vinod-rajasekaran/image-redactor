@@ -23,8 +23,8 @@ All five leaks are **partial coverage**: the entity was found, the box did
 not cover all of it.
 
 **That number does not generalise, and we can prove it.** On 10 synthetic
-Indian cheques from an unrelated dataset, only 2 of 30 PII regions are
-fully covered — mean coverage 27% for account numbers, 37% for payee
+Indian cheques from an unrelated dataset, **not one of 30 PII regions is
+fully covered** — mean coverage 20% for account numbers, 46% for payee
 names. Cheques carry handwriting and signatures throughout, and the
 handwritten payee name is unreadable to both OCR engines. 93.5% describes
 printed forms and ID cards, half of which this project generated; see
@@ -72,7 +72,7 @@ Validation corpora live under `datasets/` — images and annotations
 together, one schema, one loader. Every image is synthetic: no real
 person, document or account appears anywhere in this repo. All four image
 corpora are committed, so every image benchmark below reproduces from a
-clone alone; only `text/`, 93MB of third-party parquets, is
+clone alone; only the third-party text benchmarks under `text/` are
 download-on-demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
 
@@ -255,9 +255,9 @@ want a larger slice.
 
 | field | mean covered |
 |---|---:|
-| signature | 53% |
-| payee name | 37% |
-| account number | 27% |
+| signature | 58% |
+| payee name | 46% |
+| account number | 20% |
 
 Because these boxes are trustworthy, this is the one place *coverage* is a
 meaningful metric — the same measurement computed from vision-generated

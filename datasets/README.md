@@ -43,16 +43,15 @@ poor light.
 
 All three image corpora are committed, so every image figure in
 `DECISIONS.md` reproduces from a clone with no downloads. `documents/` and
-`pack/` cost 3.6MB together. `cheques/` costs 44MB for 10 images, which is
-most of this repo:
+`pack/` cost 3.6MB together. `cheques/` costs 14MB for 10 images:
 
-- they are 2365×1065 with paper texture and ~138k unique colours, so PNG
-  has almost nothing to remove — lossless re-encoding saved 5%
-- the corpus was trimmed from 20 images to 10 to halve that, keeping all
-  four bank layouts (axis 3, canara 3, icici 2, syndicate 2)
-- JPEG q95 would be 15MB, but it changes pixels, and pixels are the input
-  to both the OCR and the coverage measurement — that is a re-measurement,
-  not a compression
+- the source PNGs are 2365×1065 with paper texture and ~138k unique
+  colours, so PNG had almost nothing to remove — 4.4MB each, 44MB total
+- the corpus was trimmed from 20 images to 10, keeping all four bank
+  layouts (axis 3, canara 3, icici 2, syndicate 2)
+- then stored as **JPEG q95, no chroma subsampling**: 44MB → 14MB. This
+  changes pixels, so the coverage figures were **re-measured** on the
+  JPEGs rather than carried over — and they moved. See DECISIONS.md.
 
 **The exclusions are third-party data this project did not generate**:
 `text/` (2.2MB, fetched by `benchmark_indiapii.py` and `benchmark_maskara.py`
