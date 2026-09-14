@@ -15,9 +15,15 @@ ImageRedactorEngine). Entirely local, no cloud calls. Design spec:
   per-image pipeline (open → analyze → redact → save), `main()` wires
   up argparse, logging, the progress bar, and the summary/report.
 - `ocr_backends.py` — `build_ocr()` returns a Presidio `OCR` subclass.
-  Paddle returns *line* boxes, so `_split_line_into_words()` divides
-  them across words by character count; without that, one PII word
-  blacks out its whole line.
+  Two Paddle landmines, both of which *raised* detection counts while
+  *lowering* actual redaction, so only leakage scoring caught them:
+  (1) Paddle detects lines, not words — estimating word positions by
+  character count puts boxes on the label instead of the value in
+  label/value forms, so each word now carries its whole line box;
+  (2) `use_doc_orientation_classify` and `use_doc_unwarping` must stay
+  **off**, since PaddleOCR reports boxes in the rectified image space,
+  ~40px off from the image being redacted. Do not re-enable either
+  without re-running `score_run.py`.
 - `visual_redaction.py` — faces (Haar), QR (`cv2.QRCodeDetector`) and
   1-D barcodes (`cv2.barcode.BarcodeDetector`). On by default;
   `--no-visual-pii` disables. **Always locate with `detect()`, never

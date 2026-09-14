@@ -33,29 +33,25 @@ def _blank_result() -> dict[str, list]:
 
 
 def _split_line_into_words(text: str, x: int, y: int, w: int, h: int) -> list[tuple]:
-    """Approximate per-word boxes inside a line box.
+    """Emit each word in a line carrying the *whole line box*.
 
-    PaddleOCR returns one box per detected line. Handing Presidio whole
-    lines would black out an entire line whenever one word in it is PII,
-    so the line box is divided between its words in proportion to their
-    character counts.
+    PaddleOCR detects text lines, not words, and gives no way to locate a
+    word inside one. An earlier version divided the line box between words
+    in proportion to their character counts, which assumes uniform spacing
+    — and that is wrong for exactly the documents this tool targets. In a
+    label/value form ("Name:        Rajesh Kumar Sharma") the wide gap
+    shifts every estimated box leftward, so the black rectangle lands on
+    the label while the value stays legible. Leakage scoring caught it:
+    Paddle detected *more* entities than Tesseract while redacting less of
+    the PII (62.4% vs 74.1%), with a DOB and a mobile number left fully
+    visible under boxes floating in the margin.
+
+    So a PII word blacks out its entire line. That over-redacts the label
+    next to it, which is the correct trade here: a heavier box leaks
+    nothing, a misplaced one leaks everything.
     """
     words = text.split()
-    if not words:
-        return []
-    if len(words) == 1:
-        return [(words[0], x, y, w, h)]
-
-    total_chars = sum(len(word) for word in words) + (len(words) - 1)
-    cursor = x
-    boxes = []
-    for i, word in enumerate(words):
-        share = len(word) / total_chars
-        word_w = max(1, int(round(w * share)))
-        boxes.append((word, cursor, y, word_w, h))
-        gap = max(1, int(round(w * (1 / total_chars)))) if i < len(words) - 1 else 0
-        cursor += word_w + gap
-    return boxes
+    return [(word, x, y, w, h) for word in words]
 
 
 class PaddleOCREngine(OCR):
@@ -68,8 +64,19 @@ class PaddleOCREngine(OCR):
     def __init__(self, lang: str = "en") -> None:
         from paddleocr import PaddleOCR as _PaddleOCR
 
+        # Document orientation and UVDoc unwarping must stay OFF. They
+        # geometrically rectify the page and then report boxes in *that*
+        # space, so every coordinate comes back shifted relative to the
+        # image we redact — roughly 50px vertically on an A4-ish scan,
+        # enough to black out the row above the PII and leave the PII
+        # itself legible.
         try:
-            self._ocr = _PaddleOCR(lang=lang, use_textline_orientation=True)
+            self._ocr = _PaddleOCR(
+                lang=lang,
+                use_textline_orientation=True,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+            )
         except TypeError:
             # Older releases used a different flag for the angle classifier.
             self._ocr = _PaddleOCR(lang=lang, use_angle_cls=True, show_log=False)

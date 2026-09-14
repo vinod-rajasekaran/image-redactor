@@ -136,7 +136,7 @@ giving up.
 | Default | Why not the obvious choice | What it buys |
 |---|---|---|
 | `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 silently drops every context-boosted weak match | A real PAN card's number is redacted instead of left visible; `IN_VOTER` too. At 0.5, `IN_PASSPORT` can *never* fire |
-| `--ocr tesseract` | PaddleOCR is clearly more accurate (234 entities vs 205) | 23x faster (12.5s vs 285s for 20 images) for iteration. Use `--ocr paddle` when quality matters — it fixes the garbled email, the unreadable loan form, and `IN_VEHICLE_REGISTRATION` |
+| `--ocr tesseract` | PaddleOCR leaks less PII — 84.7% recall vs 74.1% | 23x faster (12.5s vs 285s for 20 images), which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not for production redaction |
 | `--upscale auto` | Leaving images at native size is simpler | A real job-application photo went from **0 detections to 7**. Also *raises* precision: the PAN card dropped from 9 spurious `PERSON` hits to a correct 4 |
 | visual PII **on** | Presidio only ever redacts OCR'd text | Faces, QR codes and barcodes get redacted. An intact Aadhaar QR encodes name, DOB and address — redacting the printed number while leaving the QR is not redaction |
 | OpenCV `detect()`, never `detectAndDecode()` | The decode APIs look strictly more capable | Decode-gated APIs return **no box** for a code they cannot read, silently skipping exactly the unreadable codes that most need blacking out. This bug shipped once here and was caught only because a barcode count stayed at 0 |
@@ -290,35 +290,42 @@ matches. Any recognizer that depends on exact character patterns
 degrades in proportion to OCR quality — which is why image redaction
 cannot be assumed as reliable as text redaction.
 
-### Benchmark: OCR backend × visual PII
+### Benchmark: Tesseract vs PaddleOCR, measured by leakage
 
-All four combinations over the same 20 images (10 synthetic, 10 photos of
-Indian documents):
+Scored with `score_run.py` against `ground_truth.json` over the same 20
+images (10 synthetic, 10 photos of Indian documents). "Leaked" means the
+PII was legible in the input and is *still legible in the redacted
+output* — the only measure that matters.
 
-| run | entities | EMAIL | PHONE | visual | no PII found | seconds |
-|-----|---------:|------:|------:|-------:|-------------:|--------:|
-| tesseract, text only | 205 | 1 | 25 | 0 | 2 | 12.5 |
-| tesseract + visual   | 205 | 1 | 7  | 7 | 2 | 13.4 |
-| paddle, text only    | **234** | **3** | **27** | 0 | **0** | 285.3 |
-| paddle + visual      | **234** | **3** | **27** | 7 | **0** | 289.5 |
+| run | redacted | leaked | recall on legible PII | seconds |
+|-----|---------:|-------:|----------------------:|--------:|
+| tesseract | 63 | 22 | 74.1% | 12.5 |
+| paddle | **72** | **13** | **84.7%** | 285 |
 
-PaddleOCR finds ~14% more entities and, more importantly, fixes the
-specific misses Tesseract had:
+Paddle leaks 9 fewer items: `PERSON` 3 → **0**, `LOCATION` 8 → **4**,
+`IN_PASSPORT` 1 → **0**. It reads the email Tesseract garbled, reads the
+laptop-screen loan form Tesseract could not read at all, and gets
+`KA05MJ4521` where Tesseract returns `KAO5MJ4521`. The cost is **~23x
+slower** on CPU. A further 11 items are illegible to *both* engines.
 
-- **the garbled email** (`priya.sharma@gmail.com`, previously OCR'd as
-  `oriyasharma@grmal ON`) is now read and redacted
-- **the laptop-screen loan form** went from **0 detections to 8**
-  (name, email, DOB, URL) — Tesseract could not read it at all
-- **`IN_VEHICLE_REGISTRATION`** now matches, because Paddle reads
-  `KA05MJ4521` rather than Tesseract's `KAO5MJ4521` (letter `O`)
-- **`IN_PASSPORT`** now fires on the synthetic job application
+**Two bugs this benchmark caught, and why counting detections would not
+have.** Before these fixes Paddle scored **62.4%** — *worse* than
+Tesseract — while simultaneously reporting **more** detections (234 vs
+205). Both bugs produced that same misleading signature:
 
-The cost is speed: **~23x slower** (285s vs 12.5s for 20 images), since
-it runs detection and recognition models on CPU. Visual PII is
-independent of the OCR choice and costs ~1 second for all 20 images.
+1. Paddle detects text *lines*, not words. Estimating word positions by
+   character count assumes uniform spacing, which is wrong for
+   label/value forms: the wide gap shifted every box leftward onto the
+   label, leaving the value legible. Each word now carries its whole
+   line box, over-redacting the label instead.
+2. PaddleOCR 3.x runs document orientation and UVDoc unwarping by
+   default, and reports boxes in that *rectified* space — roughly 40px
+   off from the image being redacted, enough to black the row above the
+   PII. Both are now disabled in `ocr_backends.py`; do not re-enable
+   them without re-scoring.
 
-Recommendation: `--ocr paddle --visual-pii` when redaction quality
-matters, plain `tesseract` for quick iteration.
+An entity-count comparison rated the broken configuration as the better
+one. Only reading the output back caught it.
 
 ### Relevant to kaapi-guardrails
 
