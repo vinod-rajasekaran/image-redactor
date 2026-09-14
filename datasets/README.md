@@ -17,7 +17,19 @@ is where a script reads it from.
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic |
 | `pack/` | 20 | yes | box | `generate_synthetic_indian_pii_images.py` — pack authored with Claude, generated locally | fully synthetic |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
-| `text/` | 2 files | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
+| `text/` | 2 corpora + 1 cache | no | spans | IndiaPII-Bench; maskara-indian-pii-200k; plus the cheque source parquet | CC-BY-4.0; MIT; Apache-2.0 |
+
+`text/` holds documents as **plain text with character-offset spans**, no
+images. That is the point: fed straight to `AnalyzerEngine.analyze()`,
+they isolate the recognizers from OCR, so a miss is a pattern gap and
+nothing else. maskara adds an `ocr` domain of deliberately corrupted text
+and `hard_negative` decoys, which is how the Aadhaar OCR-tolerance was
+justified and how the PAN spacing gap was pinned on the pattern rather
+than the reader.
+
+`cheques_test.parquet` sits there too but is not a text corpus — it is the
+95MB source the cheque images are unpacked from, and since those are now
+committed it is only a cache for fetching a larger slice.
 
 Images 11–20 *imitate* photographed pages — perspective, glare, low
 contrast — and the notes elsewhere call them photographs for that reason.
@@ -40,7 +52,8 @@ most of this repo:
   to both the OCR and the coverage measurement — that is a re-measurement,
   not a compression
 
-**`text/` is the exclusion**: 93MB of third-party parquets, fetched by
+**`text/` is the exclusion**: 95MB of it is the cheque source parquet and
+2MB the two text benchmarks, all third-party and all fetched by
 `benchmark_indiapii.py` and `benchmark_maskara.py` per their docstrings.
 Those are span-annotated text, not images, and nothing here re-derives
 them.
