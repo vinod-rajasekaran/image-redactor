@@ -1,24 +1,26 @@
 # image-redactor
 
 A local evaluation harness for [Microsoft Presidio](https://microsoft.github.io/presidio/)'s
-image redaction pipeline: local OCR (Tesseract) + local Presidio
-analyzer (spaCy NLP) + Presidio's image redactor, run end-to-end
-against a folder of images. No cloud calls, no external APIs — OCR and
-PII detection both run on-device.
+image redaction, built for Indian documents. OCR, PII detection and
+redaction all run on-device; the only optional network call is to Claude,
+and only for *scoring*, never for redaction.
 
-It targets Indian documents specifically: it registers Presidio's
-India-specific recognizers (which are not enabled by default), ships a
-generator for synthetic Indian test documents, and redacts faces and QR
-codes, which Presidio does not.
-
-Crucially it **measures leakage** rather than counting detections —
-reading each redacted image back to check whether the PII is still
-legible. That distinction has already caught two bugs that made the tool
-look better while it redacted less.
+It exists to answer one question honestly: **after redaction, can the PII
+still be read?** Most of the work here went into making that question
+measurable — the naive answers turned out to be wrong six times.
 
 > This README describes how the tool works **now**.
 > [DECISIONS.md](DECISIONS.md) is the time-ordered history: every default,
-> why it was chosen, the evidence, and the options tried and rejected.
+> the evidence behind it, and the options tried and rejected.
+
+## Current result
+
+**93.5% of known PII redacted** — 72 of 77 items across 20 documents, with
+5 confirmed leaks and nothing left unverified. Scored by showing every
+redacted output to Claude and asking what remains readable.
+
+All five leaks are **partial coverage**: the entity was found, the box did
+not cover all of it.
 
 ## Setup
 
@@ -28,347 +30,269 @@ Requires macOS with [Homebrew](https://brew.sh).
 ./setup.sh
 ```
 
-This installs Tesseract (via brew), creates a Python 3.12 venv
-(spaCy/Presidio don't yet ship wheels for very new Python versions),
-installs `requirements.txt`, and downloads the spaCy `en_core_web_lg`
-model (~400MB).
+Installs Tesseract and zbar, creates a Python 3.12 venv (spaCy and
+Presidio have no 3.13+ wheels), installs `requirements.txt`, and downloads
+the spaCy `en_core_web_lg` model (~400MB), the YuNet face model and the
+optional WeChat QR models.
+
+For vision scoring, add an API key:
+
+```bash
+cp .env.example .env    # then fill in ANTHROPIC_API_KEY
+```
+
+`.env` is gitignored.
 
 ## Usage
 
 ```bash
 source venv/bin/activate
 
-# Optional: create 10 synthetic Indian-context PII documents in input_images/
-python generate_test_images.py
+python generate_test_images.py          # 10 synthetic Indian documents (optional)
+python evaluate_redactor.py             # redact input_images/ -> runs/<name>/
 
-# Redact input_images/ -> runs/<timestamp>_tesseract_visual/images/
-python evaluate_redactor.py
-
-# Score that run for leakage against ground truth
-python score_run.py runs/<run-name>
+python build_ground_truth.py            # what PII each image contains
+python vision_score.py runs/<name>      # ask Claude what survived
+python score_run.py runs/<name>         # the score
+python annotate_leaks.py runs/<name>    # draw the failures onto the images
 ```
 
-Or point at your own folders:
+Drop your own images into `input_images/` and run `evaluate_redactor.py`;
+the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
-```bash
-python evaluate_redactor.py --input path/to/images --runs-dir path/to/runs
-```
+`input_images/`, `runs/`, `ground_truth.json` and `input_annotations.json`
+are gitignored — they describe or contain real PII.
 
 ### Options
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input` | `input_images` | Folder of images to redact |
-| `--runs-dir` | `runs` | Parent folder; each run gets its own subfolder |
-| `--run-name` | timestamp + settings | Name for this run's folder |
-| `--ocr` | `tesseract` | OCR backend: `tesseract`, `paddle` or `rapidocr` |
-| `--psm` | `4` | Tesseract page-segmentation mode (3, 4, 6, 11, 12) |
-| `--no-visual-pii` | off | Skip face and QR/barcode redaction (on by default) |
-| `--no-reading-order` | off | Skip re-sorting OCR words into reading order (on by default) |
-| `--pyzbar` | off | Also decode code payloads with pyzbar (needs `zbar`) |
-| `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
-| `--entities` | all supported | Restrict to specific entity types |
-| `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
-| `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback |
-| `--medical-ner` | off | Detect diagnoses/medications (HuggingFace Medical-NER) |
-| `--wechat-qr` | off | Also run the WeChat QR detector (supplement, not replacement) |
+| `--runs-dir` / `--run-name` | `runs` / timestamp | Where this run is written |
+| `--ocr` | `tesseract` | `tesseract`, `paddle` or `rapidocr` |
+| `--psm` | `4` | Tesseract page-segmentation mode |
+| `--threshold` | `0.4` | Minimum Presidio confidence to redact |
+| `--entities` | all | Restrict to specific entity types |
+| `--style` | `solid` | `solid`, `blur` or `pixelate` |
+| `--upscale` | `auto` | Pre-OCR upscale; `auto` targets 600px wide |
+| `--single-variant` | off | Disable the 3-variant preprocessing union |
+| `--no-visual-pii` | off | Skip face and QR/barcode redaction |
+| `--no-merge-blocks` | off | Don't merge stacked boxes into blocks |
+| `--no-reading-order` | off | Don't re-sort OCR words into reading order |
+| `--medical-ner` | off | Detect diagnoses/medications (needs transformers) |
+| `--strict-aadhaar` | off | Require a valid Verhoeff checksum |
+| `--pyzbar` / `--wechat-qr` | off | Extra code detectors (supplements, not replacements) |
 
-`--threshold` and `--entities` mirror the `threshold` / `entity_types`
-config in [kaapi-guardrails' `pii_remover` validator](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md),
-so this harness can be pointed at the same settings that validator runs
-in production. The one deliberate divergence is the **default** threshold
-(0.4 here vs 0.5 there) — see "Why the defaults are what they are" for why
-0.5 silently misses PAN, voter and passport numbers.
+`--threshold` and `--entities` mirror the config of
+[kaapi-guardrails' `pii_remover`](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md).
+The default threshold is a deliberate divergence — see below.
 
-```bash
-# Only redact names and Aadhaar numbers, aggressively
-python evaluate_redactor.py --entities PERSON IN_AADHAAR --threshold 0.3
+## How an image is processed
+
+```
+sanitize (EXIF orientation applied, GPS + thumbnail stripped)
+   │
+   ├─ thread ── OCR: rgb ───────┐
+   ├─ thread ── OCR: greyscale  ┼─→ union of boxes ─→ merge stacked blocks
+   ├─ thread ── OCR: clahe+otsu ┤              │
+   └─ thread ── faces / QR / barcode ──────────┘
+                                              │
+                            draw on the original colour image
+                                              │
+                                   save without metadata
 ```
 
-**To evaluate your own images:** drop them into `input_images/`
-(created by `setup.sh`) and run `evaluate_redactor.py` — no need to
-run the generator first. Supported formats: `.png .jpg .jpeg .tiff
-.bmp`.
-
-`input_images/`, `runs/` and `ground_truth.json` are git-ignored, since
-they describe or contain real PII from images you drop in.
+Each variant goes through Presidio's analyzer: regex + checksum
+recognizers for IDs, spaCy NER for names and places, plus a context boost
+that depends on OCR emitting each label beside its value.
 
 ## Output
 
-Each run writes a self-describing folder so results stay reproducible and
-comparable:
-
 ```
-runs/<run-name>/
-  config.json    # exactly what this run was asked to do
-  summary.json   # totals, per-entity counts, per-image results
-  run.log        # full log
-  images/        # redacted images
+runs/<name>/
+  config.json           exactly what this run was asked to do
+  summary.json          totals, per-entity counts, per-image results
+  score.json            leakage verdicts, once scored
+  vision_verdicts.json  what Claude saw, if vision-scored
+  run.log
+  images/               redacted images
+  scored/               failures outlined, after annotate_leaks.py
 ```
 
-`config.json` records the OCR backend, threshold, entity list, upscale
-setting, visual-PII flag, image count, and platform/Python versions —
-enough to reproduce or audit the run later. `summary.json` embeds that
-same config alongside the results, so a single file is self-contained.
-
-Every input image gets a counterpart in `images/` under the same
-filename, with detected PII regions blacked out. Images where no PII was
-found are copied through unchanged, so the folder is always a complete
-mirror of the input and a downstream consumer never silently loses a file.
-
-A per-image failure (corrupt file, unreadable format) is logged and
-skipped — it does not stop the batch. Exit code is `2` if any image
-failed, `0` otherwise, `1` on a fatal startup error (missing input
-folder, missing Tesseract, missing spaCy model).
+Every input gets an output under the same name — images with no PII are
+copied through, so the folder is always a complete mirror and a downstream
+consumer never silently loses a file. A per-image failure is logged and
+skipped rather than aborting the batch.
 
 ## Measuring leakage, not detections
 
-Entity counts cannot tell you what fraction of PII was caught — they move
+Entity counts cannot tell you what fraction of PII was caught: they move
 on both misses and false positives. `ground_truth.json` records the PII
-that actually exists in each test image — the synthetic half derived from
-the generator so it cannot drift, the real half labelled by reading each
-image at full resolution — and `score_run.py` measures what survived:
+actually present in each image — the synthetic half derived from the
+generator so it cannot drift, the real half labelled by reading the
+documents. Scoring reads the **output** back and asks, per item, whether
+it is still legible.
+
+An item is `leaked` only when readable in the output, `redacted` only when
+readable before and not after, and `unverifiable` otherwise. Results come
+as a range: the floor assumes every unverifiable item leaked, the ceiling
+assumes none did.
+
+**`vision_score.py` collapses that range.** An OCR-based scorer can only
+see what its OCR sees, and on exactly the low-contrast photographs where
+redaction fails it reads almost nothing — it has reported plainly visible
+PII as both "unverifiable" and "redacted". Claude sees them, and found
+leaks that a careful manual pass had missed.
+
+| scorer | recall | leaks found |
+|---|---|---:|
+| OCR | 88.3% – 100.0% | 0 |
+| manual, by eye | 96.1% | 3 |
+| **Claude vision** | **93.5%** | **5** |
+
+## Auditing the ground truth
+
+The label set has been the single largest source of error here, swinging
+96 → 130 → 77 items across three revisions and moving the headline about
+ten points each time.
 
 ```bash
-python build_ground_truth.py        # writes ground_truth.json
-python evaluate_redactor.py --run-name mytest
-python score_run.py runs/mytest     # writes runs/mytest/score.json
+python annotate_inputs.py     # diff vision's view against the labels
 ```
 
-Scoring reads the *output* image back with OCR and asks, per PII item:
-was it legible before, and is it still legible now? That is stricter than
-checking detections, because it also catches boxes drawn in the wrong
-place.
+It **reports rather than rewrites**: what counts as PII is a policy
+question that belongs to a person, and human-owned labels stay independent
+of the model that grades the output. On the sample set it surfaced two
+items never labelled — a signature bearing a name, and a prescribing
+doctor.
 
-Results are a **range**, because this measurement has been wrong in both
-directions. Reporting recall over "legible" items only excluded
-everything the scorer could not read, and flattered the result: a
-laptop-screen form with an unredacted name, email, phone and address
-scored as zero misses. Counting those as leaks instead over-corrected —
-an email verified by eye as fully blacked out was reported as visible,
-purely because the scorer's Tesseract could not read it in the input.
-
-So an item is only called **leaked** when it is readable in the output,
-only **redacted** when it was readable before and is not now, and
-**unverifiable** otherwise. The floor assumes every unverifiable item
-leaked; the ceiling assumes none did. Narrow the gap with
-`--scorer-ocr paddle`: the question is whether *anyone* can read the PII,
-not whether Tesseract can.
-
-`annotate_leaks.py runs/<run>` renders the failures visually into
-`runs/<run>/scored/` — red outlines for confirmed leaks, orange for
-unverifiable, with a banner listing anything that could not be located.
+It records bounding boxes for inspection but computes nothing from them.
+Per-region coverage was built and removed: the boxes are inconsistently
+off by about a text row, and coverage reported 0% for a field that is
+plainly blacked out.
 
 ## Why the defaults are what they are
 
-Every default below was chosen against measured evidence on the sample
-set, and several are deliberately *not* the obvious choice. If you are
-tempted to change one, the "what it buys" column is what you would be
-giving up.
+Every default was chosen against measured evidence, and several are
+deliberately *not* the obvious choice.
 
 | Default | Why not the obvious choice | What it buys |
 |---|---|---|
-| `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 silently drops every context-boosted weak match | A real PAN card's number is redacted instead of left visible; `IN_VOTER` too. At 0.5, `IN_PASSPORT` can *never* fire |
-| `--ocr tesseract` | PaddleOCR leaks less PII — 75.0% recall vs 67.7% | ~17x faster, which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not production redaction |
-| `--psm 4` | Tesseract's own default is 3 | +2.1 points of recall (67.7% vs 65.6%) for no extra time. PSM 4, 6 and 11 tie exactly; 4 matches the layout these documents actually have |
-| `--upscale auto` | Leaving images at native size is simpler | A real job-application photo went from **0 detections to 7**. Also *raises* precision: the PAN card dropped from 9 spurious `PERSON` hits to a correct 4 |
-| visual PII **on** | Presidio only ever redacts OCR'd text | Faces, QR codes and barcodes get redacted. An intact Aadhaar QR encodes name, DOB and address — redacting the printed number while leaving the QR is not redaction |
-| OpenCV `detect()`, never `detectAndDecode()` | The decode APIs look strictly more capable | Decode-gated APIs return **no box** for a code they cannot read, silently skipping exactly the unreadable codes that most need blacking out. This bug shipped once here and was caught only because a barcode count stayed at 0 |
-| `--pyzbar` **off** | pyzbar is the usual go-to for barcodes | It decoded **0** of the codes in the sample set, and needs the `zbar` system library. OpenCV located all of them, including one pyzbar missed entirely |
-| `--wechat-qr` **off** | The WeChat model is genuinely better at small/blurry QR | **Validated and rejected as a default:** it found **0 codes vs the stock detector's 4**, because its only Python entry point is `detectAndDecode()`. A control test on an encodable QR confirmed it works — it is decode-gated, not broken. Kept as an opt-in supplement (unioned, never substituted) for real documents where payloads matter |
-| Aadhaar OCR-tolerant fallback **on** | Stock Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, not down-scored, so one OCR digit error leaves a real Aadhaar fully visible. A real sample card's number is checksum-invalid: stock Presidio redacted nothing, the fallback caught it |
-| That fallback has **no look-around guards** | Guards would stop it matching inside credit-card numbers | OCR flattens the page into one string with no field boundaries, so an adjacent phone number is indistinguishable from a continuation. Guards were tried and dropped real Aadhaars. Cost is label precision in the report, not redaction quality |
-| spaCy `en_core_web_lg` | A newer/Indic NER model sounds better for Indian documents | Aadhaar/PAN/voter are **regex + checksum**, not NER — no model change affects them. For names, this model scored 19/20 on Indian names and matches kaapi-guardrails' production validator |
-| YuNet for faces, Haar as fallback | Haar ships with OpenCV and needs no model file | Haar reported **3 faces where 2 exist**, inventing one on the Aadhaar card; YuNet found exactly the 2. Haar still runs if the model file is missing, so a skipped download degrades quality rather than breaking |
-| Faces padded 30% | The detector returns a tight box | Tight boxes clip chin, hair and ears. The first run left a recognisable sliver of face visible |
-| Clean images copied through | Writing only redacted files is less work | The output folder stays a complete mirror of the input, so a downstream consumer never silently loses a file |
-
-Two caveats on reading the numbers: entity **counts** move on both misses
-and false positives, so compare entity *types* and look at the images.
-And visual detection does false-positive — QR detection fires on some
-dense text blocks, Haar finds a phantom second face on one card. Both
-over-redact regions that were PII anyway, which is the right trade here.
+| `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 drops every context-boosted weak match | A real PAN card's number is redacted rather than left visible. At 0.5, `IN_PASSPORT` can never fire |
+| `--ocr tesseract` | PaddleOCR reads better | ~17x faster — and with the union and block merging, Tesseract now scores higher anyway |
+| 3-variant union | One preprocessing path is simpler | No variant wins everywhere: CLAHE+Otsu rescues a laptop-screen photo but destroys the coloured PAN card. Union recovered 71/77 against 67 for the best single variant |
+| `--psm 4` | Tesseract's own default is 3 | +2 points of recall for free, and it emits each label beside its value |
+| block merging | Redacting each detected box is simpler | A wrapped address is detected line by line and often only partly; the enclosing rectangle covers what was never detected at all |
+| visual PII **on** | Presidio only redacts OCR'd text | An intact Aadhaar QR still encodes name, DOB and address |
+| YuNet over Haar | Haar needs no model file | Haar reported 3 faces where 2 exist |
+| `detect()`, never `detectAndDecode()` | The decode APIs look more capable | Decode-gated APIs return **no box** for a code they cannot read — exactly the codes that most need covering |
+| `--style solid` | Blur looks less brutal | Only solid destroys the information; blur and pixelation are partially reversible |
+| Aadhaar fallback **on** | Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, so one OCR digit error leaves a real Aadhaar fully visible |
+| that fallback has **no regex guards** | Guards would stop it matching inside card numbers | OCR flattens the page and destroys field boundaries; guards dropped real Aadhaars |
+| spaCy `en_core_web_lg` | A newer NER model sounds better | Aadhaar/PAN/voter are regex+checksum, not NER. It also matches kaapi-guardrails' production validator |
 
 ## Indian entity support
 
-`custom_recognizers.py` adds seven entities Presidio has no recognizer
-for, found by ground-truth scoring: `IN_IFSC`, `IN_DRIVING_LICENCE`,
-`IN_BANK_ACCOUNT`, `IN_PATIENT_ID` (UHID/MRN), `IN_PNR`,
-`IN_POLICY_NUMBER` and `IN_MEDICAL_REG`. They lifted recall from 65.6%
-to 71.9%.
-
-Two of those have distinctive shapes and fire on their own — an IFSC's
-mandatory `0` in position five makes it near-unambiguous. The rest are
-**shapeless**: an account number is a run of digits, a PNR is six
-alphanumerics. Those carry a deliberately low base score and rely on
-Presidio's context boost to clear the threshold, so they fire beside
-"Account No." and stay silent elsewhere.
-
-That only works because OCR puts the label next to its value. Tesseract
-PSM 4 does; PSM 3 emits every label before every value and would strand
-them. **Re-score after changing OCR backend or PSM.**
-
-
-Presidio ships India-specific recognizers but **registers none of them
-by default** — a stock `AnalyzerEngine()` loads only US/UK recognizers.
-This harness registers all six explicitly in `build_engines()`:
-`IN_AADHAAR`, `IN_PAN`, `IN_VOTER`, `IN_PASSPORT`,
+Presidio ships India recognizers but **registers none by default** — a
+stock `AnalyzerEngine()` loads only US/UK ones. All six are registered
+here: `IN_AADHAAR`, `IN_PAN`, `IN_VOTER`, `IN_PASSPORT`,
 `IN_VEHICLE_REGISTRATION`, `IN_GSTIN`.
 
-Note that Aadhaar/PAN/Voter IDs are **regex + checksum** entities, not
-NER ones — no spaCy model detects them, so the NER model choice is
-irrelevant for these. The NER model only matters for `PERSON` and
-`LOCATION`; `en_core_web_lg` detected 19/20 Indian names in testing,
-and is what kaapi-guardrails runs in production, so it's kept as-is.
+`redactor/recognizers.py` adds seven more Presidio has nothing for:
+`IN_IFSC`, `IN_DRIVING_LICENCE`, `IN_BANK_ACCOUNT`, `IN_PATIENT_ID`,
+`IN_PNR`, `IN_POLICY_NUMBER`, `IN_MEDICAL_REG`.
 
-## Current limitations
+IFSC and driving licences have distinctive shapes and fire unaided. The
+rest are **shapeless** — an account number is a digit run, a PNR is six
+alphanumerics — so they carry a low base score and lean on the context
+boost, firing beside "Account No." and staying silent elsewhere. That only
+works because OCR puts the label next to its value; **re-score after
+changing OCR backend or PSM**.
 
-What this tool still does not redact, as of the latest run. History and
-rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
+## Benchmarks
 
-- **Multi-line addresses are the largest remaining leak.** `LOCATION`
-  spans get partially covered, leaving enough to reconstruct the address.
-- **Clinical free text** (a diagnosis) is not a pattern and needs a
-  model; `--medical-ner` covers it, off by default because it pulls in
-  transformers and downloads a model.
-- **OCR errors defeat exact-pattern entities.** An email read as
-  `oriyasharma@grmal ON` never matches `EMAIL_ADDRESS`; a vehicle
-  registration read as `KAO5MJ4521` (letter `O` for digit `0`) never
-  matches. Image redaction is therefore inherently less reliable than
-  text redaction, and degrades with image quality.
-- **Handwriting is not read at all.** The handwritten prescription body
-  is invisible to both OCR engines.
-- **Only English.** OCR and the spaCy model are English-only, so names
-  and addresses in Devanagari or Kannada — present on real Aadhaar cards
-  and utility bills — are never detected.
-- **Cropped values are missed.** A PAN visible only as `DE1234F` does not
-  match `IN_PAN`, which needs the full 5-letter/4-digit/1-letter form.
-- **Two-column layouts weaken context scoring.** OCR emits every label
-  before every value, stranding "Aadhaar No.:" far from its number, so
-  Presidio's context enhancer applies no boost. This is why the Aadhaar
-  fallback does not rely on context words.
-- **Visual detection false-positives.** QR detection fires on some dense
-  text blocks. These over-redact regions that were PII anyway, which is
-  the intended trade, but the counts are not precision measurements.
-- **Metadata is stripped, and now guarded.** Phone photos carry GPS,
-  device IDs and often an embedded thumbnail of the image *before*
-  redaction. Output is metadata-free and EXIF orientation is baked into
-  the pixels rather than discarded, so a sideways photo is OCR'd upright.
-  `test_metadata_stripping.py` is the regression guard — it fails if the
-  protection is removed.
-
-## What raised recall, in order
-
-Measured end to end on the same 20 images, Tesseract throughout:
-
-Recall is reported as a **range** over all 130 known PII items: a floor
-of what is confirmed redacted, and a ceiling assuming every unverifiable
-item was also redacted. See "Measuring leakage" for why both numbers are
-needed.
-
-Ground truth counts only what **identifies a person** — 77 items across
-20 images. An earlier version counted bare gender, standalone ages,
-account balances, individual transactions, lab measurements, institution
-names, flight numbers and seats, then scored the tool as failing for
-leaving them alone. None of those identify anyone.
-
-| engine | recall | confirmed redacted | confirmed leaked | unverifiable |
-|---|---|---:|---:|---:|
-| tesseract | 83.1% – 94.8% | 64 | 4 | 9 |
-| **paddle** | **85.7% – 97.4%** | 66 | **2** | 9 |
-
-Under Paddle only two items are confirmed leaked, and both are the same
-multi-line address — the street line is redacted while the locality and
-PIN survive. Merging adjacent `LOCATION` fragments into one region is the
-remaining fix.
-
-The nine unverifiable items are where a human still has to look. Checking
-the largest cluster by eye — the photographed laptop screen — found four
-of its five items correctly redacted by Paddle and one leaked, so the
-true figure sits near the top of that range rather than the bottom.
-
-Health items (medications on a prescription) are tracked in a separate
-`sensitive` tier, since whether they count is a policy question rather
-than a technical one. Both engines redact all five.
-
-## Reading order
-
-OCR words are re-sorted top-to-bottom then left-to-right before analysis
-(`--no-reading-order` disables it). Presidio scores an entity higher when
-a context word sits near it, which only works if the OCR emits each label
-beside its value. Tesseract PSM 3 does not — on a form it emits every
-label and then every value:
-
-```
-before:  Patient Name: Age / Sex: Address: ... Mohammed Irfan Ali 52 / Male ...
-after:   Patient Name: Mohammed Irfan Ali Age / Sex: 52 / Male Address: ...
-```
-
-PSM 4 happens to order correctly, which is most of why it beat PSM 3.
-The wrapper makes that a property of the pipeline rather than a lucky
-segmentation mode, so a backend swap cannot quietly strand every
-context-scored recognizer.
-
-## Benchmark: OCR backends, measured by leakage
-
-Produced by `benchmark_ocr.py` over the same 20 images (10 synthetic, 10
-photos of Indian documents), scored with `score_run.py`. "Leaked" means
-the PII was legible in the input and is **still legible in the redacted
-output** — the only measure that matters. 11 further items are illegible
-to every engine and are excluded from recall.
+**OCR backends**, scored by leakage over the same 20 images:
 
 | config | redacted | still visible | recall | wall s |
 |---|---:|---:|---:|---:|
-| **paddle** | 72 | 24 | **75.0%** | 434 |
-| tesseract `--psm 4` *(default)* | 65 | 31 | 67.7% | 26 |
-| tesseract `--psm 6` | 65 | 31 | 67.7% | 25 |
-| tesseract `--psm 11` | 65 | 31 | 67.7% | 27 |
+| paddle | 72 | 24 | 75.0% | 434 |
+| tesseract `--psm 4` | 65 | 31 | 67.7% | 26 |
 | rapidocr | 64 | 32 | 66.7% | 40 |
 | tesseract `--psm 3` | 63 | 33 | 65.6% | 31 |
-| tesseract `--psm 12` | 63 | 33 | 65.6% | 37 |
 
-Three things this settles:
+Measured before the union and block merging, which lifted Tesseract past
+Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
+models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
+they share a model lineage was wrong.
 
-- **Page-segmentation mode is a free win.** PSM 4, 6 and 11 all score
-  67.7% against Tesseract's own default of 3 at 65.6%, for no extra time.
-  PSM 4 (single column of variable-size text) is now the default; the
-  three-way tie means the choice between them is arbitrary.
-- **RapidOCR is not a middle ground.** It was expected to approach
-  Paddle's accuracy on a lighter runtime, on the assumption it ran the
-  same models. It does not: it ships **PP-OCRv4 mobile**, while
-  PaddleOCR 3.7 runs **PP-OCRv6_medium** — two major versions newer and
-  a larger variant. At 66.7% and 40s it is dominated by `--psm 4`, which
-  is both more accurate and faster. Pointing RapidOCR at exported v5/v6
-  ONNX models might change this, but that is unexplored.
-- **There is no cheap path to Paddle's accuracy.** The 7-point gap
-  between `--psm 4` and Paddle costs ~17x in wall time. Nothing tested
-  sits in between.
+**Recognizers**, against
+[IndiaPII-Bench](https://huggingface.co/datasets/maskflow-ai/indiapii-bench)
+(2,000 synthetic documents, CC-BY-4.0) — plain text, so it isolates
+detection from OCR entirely:
 
-Recommendation: `--psm 4` (the default) for iteration, `--ocr paddle`
-for any output you intend to rely on.
+```bash
+python benchmark_indiapii.py
+```
+
+76.2% recall; the custom recognizers validate at 100%. `PERSON_NAME`
+scores 59%, which is the NER model's real ceiling on varied Indian names.
+Only 3% of its PII-shaped decoys are flagged as the type they mimic — and
+all of those are checksum-invalid Aadhaars, which this tool flags *by
+design*: correct for images, wrong for text.
+
+## Current limitations
+
+- **Partial coverage** — all five remaining leaks.
+- **OCR errors defeat exact-pattern entities.** An email read as
+  `oriyasharma@grmal ON` never matches `EMAIL_ADDRESS`.
+- **Handwriting** goes unread by both engines unless `--medical-ner` is on.
+- **English only.** Names and addresses in Devanagari or Kannada — present
+  on real Aadhaar cards and utility bills — are never detected.
+- **Cropped values** are missed: a PAN visible only as `DE1234F` does not
+  match `IN_PAN`.
+- **Visual detection false-positives**, mostly QR on dense text blocks.
+  Over-redacting a PII region is the intended trade.
+- **Label-column over-redaction** on some documents: real, undiagnosed.
 
 ## Relation to kaapi-guardrails
 
-Findings 1, 3 and 4 contradict the current
-[`pii-remover.md`](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md)
-docs, which describe `IN_AADHAAR` as a plain "Regex (12-digit format)"
-scoring 1.0. That doc's own Example 2 (`2345 6789 0123`) fails the
-Verhoeff checksum and is **not** detected. Its
-`IN_VEHICLE_REGISTRATION` example (`MH 12 AB 1234`, spaced) is also not
-detected. And with the documented default `threshold: 0.5`,
-`IN_PASSPORT` can never trigger.
+Sibling project `ProjectTech4DevAI/kaapi-guardrails` runs a `pii_remover`
+validator on the same Presidio + `en_core_web_lg` stack, for text. Three
+findings from this harness apply to it:
+
+- `IN_AADHAAR` is checksum-gated, not a plain regex — its docs' own
+  example `2345 6789 0123` is **not** detected.
+- `IN_VEHICLE_REGISTRATION` needs the unspaced form; the documented
+  `MH 12 AB 1234` is not detected.
+- At the documented default `threshold: 0.5`, `IN_PASSPORT` can never fire.
 
 ## Files
 
-- `evaluate_redactor.py` — the evaluation CLI
-- `ocr_backends.py` — Tesseract / PaddleOCR / RapidOCR adapters
-- `visual_redaction.py` — face, QR and barcode detection
-- `generate_test_images.py` — synthetic test document generator
-- `build_ground_truth.py` → `ground_truth.json` — the PII each image holds
-- `score_run.py` — scores a run for leakage, writes `score.json`
-- `benchmark_ocr.py` — runs every OCR config and tabulates recall vs cost
-- `image_hygiene.py` + `test_metadata_stripping.py` — EXIF/GPS/thumbnail
-  stripping and its regression guard
-- `setup.sh` — one-time environment setup
-- `DECISIONS.md` — time-ordered log of every decision and its evidence
-- `docs/superpowers/specs/` — original design spec
+```
+redactor/            the package
+  recognizers.py     India + custom recognizers, build_registry()
+  pipeline.py        per-image pipeline and engine assembly
+  ocr.py             Tesseract / PaddleOCR / RapidOCR adapters
+  detect.py          faces, QR codes, barcodes
+  geometry.py        regions, clamping, block merging
+  reading_order.py   row-major re-sort of OCR output
+  variants.py        preprocessing variants for the union
+  render.py          solid / blur / pixelate
+  hygiene.py         EXIF, GPS and thumbnail stripping
+  runs.py            run folders, config.json, summary.json
+  vision.py          shared Claude client and .env loading
+
+evaluate_redactor.py        the CLI
+generate_test_images.py     synthetic Indian documents
+build_ground_truth.py       what PII each image contains
+score_run.py                leakage scoring
+vision_score.py             ask Claude what survived
+annotate_inputs.py          audit the ground truth
+annotate_leaks.py           draw failures onto the images
+benchmark_ocr.py            OCR configs, recall vs cost
+benchmark_indiapii.py       recognizers vs IndiaPII-Bench
+test_metadata_stripping.py  regression guard for EXIF stripping
+setup.sh                    one-time environment setup
+DECISIONS.md                why everything is the way it is
+docs/superpowers/specs/     the original design spec
+```
