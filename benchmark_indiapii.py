@@ -56,23 +56,12 @@ LABEL_TO_OURS = {
 
 
 def build_text_analyzer(logger):
-    from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
-    from presidio_analyzer import predefined_recognizers
+    """Text-only analyzer using the same registry the pipeline uses."""
+    from presidio_analyzer import AnalyzerEngine
 
-    from custom_recognizers import build_custom_recognizers
-    from evaluate_redactor import (
-        INDIA_RECOGNIZER_NAMES,
-        build_aadhaar_ocr_fallback_recognizer,
-    )
+    from redactor.recognizers import build_registry
 
-    registry = RecognizerRegistry()
-    registry.load_predefined_recognizers()
-    for name in INDIA_RECOGNIZER_NAMES:
-        registry.add_recognizer(getattr(predefined_recognizers, name)())
-    for recognizer in build_custom_recognizers():
-        registry.add_recognizer(recognizer)
-    registry.add_recognizer(build_aadhaar_ocr_fallback_recognizer())
-    return AnalyzerEngine(registry=registry)
+    return AnalyzerEngine(registry=build_registry(logger))
 
 
 # Each decoy mimics a specific real entity. Flagging it as *that* type is

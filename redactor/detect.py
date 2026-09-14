@@ -1,4 +1,4 @@
-"""Detection of non-text PII in images: faces, QR codes and barcodes.
+"""Detection of non-text PII: faces, QR codes and barcodes.
 
 Presidio's ImageRedactorEngine only redacts text found by OCR. On an ID
 document that leaves the photo and the QR code untouched — and an Aadhaar
@@ -7,37 +7,18 @@ number while leaving the QR intact is not redaction at all.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image
+
+from .geometry import VisualRegion, clamp_box
 
 FACE_CASCADE_FILE = "haarcascade_frontalface_default.xml"
-MODEL_DIR = Path(__file__).parent / "models"
+MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
 YUNET_MODEL = MODEL_DIR / "face_detection_yunet_2023mar.onnx"
 YUNET_SCORE_THRESHOLD = 0.6
-
-
-@dataclass
-class VisualRegion:
-    kind: str  # "face" | "qr_code" | "barcode"
-    left: int
-    top: int
-    width: int
-    height: int
-    decoded_payload: str | None = None
-
-
-def _clamp_box(x: int, y: int, w: int, h: int, size: tuple[int, int]) -> tuple:
-    max_w, max_h = size
-    x = max(0, min(x, max_w))
-    y = max(0, min(y, max_h))
-    w = max(0, min(w, max_w - x))
-    h = max(0, min(h, max_h - y))
-    return x, y, w, h
-
 
 def _detect_faces_haar(image: Image.Image) -> list[VisualRegion]:
     cascade = cv2.CascadeClassifier(cv2.data.haarcascades + FACE_CASCADE_FILE)
@@ -46,7 +27,7 @@ def _detect_faces_haar(image: Image.Image) -> list[VisualRegion]:
                                      minSize=(20, 20))
     regions = []
     for x, y, w, h in found:
-        x, y, w, h = _clamp_box(int(x), int(y), int(w), int(h), image.size)
+        x, y, w, h = clamp_box(int(x), int(y), int(w), int(h), image.size)
         regions.append(VisualRegion("face", x, y, w, h))
     return regions
 
@@ -61,7 +42,7 @@ def _detect_faces_yunet(image: Image.Image) -> list[VisualRegion]:
     regions = []
     for face in faces if faces is not None else []:
         x, y, w, h = (int(v) for v in face[:4])
-        x, y, w, h = _clamp_box(x, y, w, h, image.size)
+        x, y, w, h = clamp_box(x, y, w, h, image.size)
         if w > 0 and h > 0:
             regions.append(VisualRegion("face", x, y, w, h))
     return regions
@@ -92,7 +73,7 @@ def _regions_from_points(points, kind: str, size, payloads=None) -> list[VisualR
         xs, ys = quad[:, 0], quad[:, 1]
         x, y = int(xs.min()), int(ys.min())
         w, h = int(xs.max() - xs.min()), int(ys.max() - ys.min())
-        x, y, w, h = _clamp_box(x, y, w, h, size)
+        x, y, w, h = clamp_box(x, y, w, h, size)
         if w <= 0 or h <= 0:
             continue
         payload = None
@@ -186,7 +167,7 @@ def detect_codes(
 
             for code in pyzbar.decode(image):
                 r = code.rect
-                x, y, w, h = _clamp_box(r.left, r.top, r.width, r.height, image.size)
+                x, y, w, h = clamp_box(r.left, r.top, r.width, r.height, image.size)
                 kind = "qr_code" if code.type == "QRCODE" else "barcode"
                 regions.append(
                     VisualRegion(kind, x, y, w, h, code.data.decode("utf-8", "replace"))
@@ -230,140 +211,3 @@ def detect_visual_pii(
     return regions
 
 
-# Haar face boxes hug the eyes/nose and routinely clip chin, hair and ears,
-# which leaves a recognisable sliver behind; codes need only a small margin.
-PAD_RATIO = {"face": 0.30, "qr_code": 0.08, "barcode": 0.08}
-
-
-REDACTION_STYLES = ("solid", "blur", "pixelate")
-
-# Deliberately aggressive. Light blur and coarse pixelation are both
-# reversible in practice — see the warning in redact_regions.
-BLUR_RADIUS_RATIO = 0.6  # of the region's short side
-PIXELATE_BLOCKS = 3  # region is reduced to ~3x3 cells before upscaling
-
-
-def _region_box(r: VisualRegion, size: tuple[int, int]) -> tuple:
-    ratio = PAD_RATIO.get(r.kind, 0.05)
-    pad_x = max(2, int(r.width * ratio))
-    pad_y = max(2, int(r.height * ratio))
-    return (
-        max(0, r.left - pad_x),
-        max(0, r.top - pad_y),
-        min(size[0], r.left + r.width + pad_x),
-        min(size[1], r.top + r.height + pad_y),
-    )
-
-
-def redact_regions(
-    image: Image.Image,
-    regions: list[VisualRegion],
-    fill=(0, 0, 0),
-    style: str = "solid",
-) -> Image.Image:
-    """Obscure the given regions on a copy of the image.
-
-    **Only `solid` actually destroys the information.** Blur and pixelate
-    are presentation choices, not security ones: blurring is a convolution
-    that can be partially inverted, and pixelating a value drawn from a
-    small known alphabet — a 12-digit Aadhaar in a standard font — is
-    recoverable by rendering every candidate and matching blocks. Neither
-    should be used on output that leaves a trusted environment.
-
-    They are worth having because a reviewer often needs to read the rest
-    of the page and judge whether a redaction landed correctly, and a wall
-    of black boxes makes that harder. The parameters below are set
-    aggressively to make casual recovery difficult, which does not make
-    them safe against a deliberate attempt.
-    """
-    if style not in REDACTION_STYLES:
-        raise ValueError(f"Unknown redaction style {style!r}; expected {REDACTION_STYLES}")
-
-    out = image.copy()
-    draw = ImageDraw.Draw(out)
-    for r in regions:
-        box = _region_box(r, out.size)
-        left, top, right, bottom = box
-        if right <= left or bottom <= top:
-            continue
-
-        if style == "solid":
-            draw.rectangle(box, fill=fill)
-        elif style == "blur":
-            patch = out.crop(box)
-            radius = max(4, int(min(patch.size) * BLUR_RADIUS_RATIO))
-            out.paste(patch.filter(ImageFilter.GaussianBlur(radius)), (left, top))
-        else:  # pixelate
-            patch = out.crop(box)
-            small = patch.resize((PIXELATE_BLOCKS, PIXELATE_BLOCKS), Image.BILINEAR)
-            out.paste(small.resize(patch.size, Image.NEAREST), (left, top))
-    return out
-
-
-# A wrapped address is detected line by line, and often only partially:
-# on the sample driving licence, "Bengaluru, Karnataka" was found on the
-# second line while the first line matched only a 61px fragment at its
-# right end, leaving "22, Indiranagar 100ft" legible. Redacting each
-# detected box separately can never fix that, because the missed text was
-# never detected. Taking the bounding box of a vertically-stacked cluster
-# does: line 2's horizontal extent covers what line 1 missed.
-BLOCK_VERTICAL_GAP = 1.6  # multiples of the median box height for that label
-BLOCK_HORIZONTAL_SLACK = 0.5  # multiples of median height, for near-misses
-
-
-def merge_same_type_blocks(items: list[tuple]) -> list[tuple]:
-    """Collapse vertically-stacked boxes of one entity type into blocks.
-
-    `items` are (label, left, top, width, height). Boxes of the same label
-    within roughly one line of each other, and horizontally overlapping,
-    are replaced by the rectangle enclosing them.
-
-    Merging repeats until nothing changes, rather than assigning each box
-    to a cluster once: a first pass in reading order left the leftmost
-    fragment of an address stranded, because the cluster it belonged to
-    only grew wide enough to reach it *after* a later box joined.
-
-    This over-redacts by design — whatever sits between two lines of an
-    address goes too, which on a form is nearly always more of the same
-    address.
-    """
-    rects = [[it[0], it[1], it[2], it[1] + it[3], it[2] + it[4]] for it in items]
-
-    # Median height per label, not across all of them: a global median mixes
-    # entity types with different fonts and is meaningless. It also silently
-    # broke this function once — the address lines sat 21px apart while the
-    # global median height was 17, so they failed to merge by four pixels.
-    per_label_height: dict[str, float] = {}
-    for label in {it[0] for it in items}:
-        heights = sorted(it[4] for it in items if it[0] == label)
-        per_label_height[label] = heights[len(heights) // 2] if heights else 1
-
-    def near(a, b) -> bool:
-        if a[0] != b[0]:
-            return False
-        median_h = per_label_height.get(a[0], 1)
-        vertical = max(0, max(a[2], b[2]) - min(a[4], b[4]))
-        horizontal = max(0, max(a[1], b[1]) - min(a[3], b[3]))
-        return (
-            vertical <= median_h * BLOCK_VERTICAL_GAP
-            and horizontal <= median_h * BLOCK_HORIZONTAL_SLACK
-        )
-
-    changed = True
-    while changed:
-        changed = False
-        for i in range(len(rects)):
-            for j in range(i + 1, len(rects)):
-                if near(rects[i], rects[j]):
-                    a, b = rects[i], rects[j]
-                    rects[i] = [
-                        a[0], min(a[1], b[1]), min(a[2], b[2]),
-                        max(a[3], b[3]), max(a[4], b[4]),
-                    ]
-                    rects.pop(j)
-                    changed = True
-                    break
-            if changed:
-                break
-
-    return [(r[0], r[1], r[2], r[3] - r[1], r[4] - r[2]) for r in rects]

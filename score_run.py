@@ -83,7 +83,7 @@ def set_scorer_ocr(backend: str = "tesseract") -> None:
     unproven.
     """
     global _SCORER_OCR
-    from ocr_backends import build_ocr
+    from redactor.ocr import build_ocr
 
     _SCORER_OCR = build_ocr(backend, psm=4 if backend == "tesseract" else None)
 

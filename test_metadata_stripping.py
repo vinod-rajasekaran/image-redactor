@@ -18,7 +18,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from image_hygiene import sanitize_for_processing, save_clean
+from redactor.hygiene import sanitize_for_processing, save_clean
 
 GPS_IFD = 0x8825
 ORIENTATION = 0x0112

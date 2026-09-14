@@ -1,36 +1,15 @@
-"""Pattern recognizers for Indian PII that Presidio does not cover.
+"""Every recognizer this project registers, and the registry assembly.
 
-Ground-truth scoring found twelve values in the sample set that no
-Presidio recognizer claims, seven of which leaked through redaction:
-IFSC codes, driving licence numbers, hospital UHIDs, airline PNRs, bank
-account numbers, insurance policy numbers and medical registration
-numbers.
-
-They fall into two groups, and the distinction drives the scores below.
-
-**Deterministic formats** — IFSC and driving licence numbers have
-distinctive shapes that cannot plausibly be anything else, so they score
-high enough to fire on their own.
-
-**Shapeless values** — an account number is a run of digits, a PNR is six
-alphanumerics, a UHID is letters followed by digits. Nothing about the
-value marks it as PII; only the neighbouring label does. These carry a
-low base score and depend on Presidio's context enhancer (+0.35) to clear
-the 0.4 threshold, which means they fire next to "Account No." and stay
-quiet elsewhere.
-
-That context dependency is only safe because OCR reading order puts the
-label beside its value. Tesseract PSM 4 does; PSM 3 emits every label
-before every value and would strand them. If you change the OCR backend
-or page-segmentation mode, re-score before trusting these.
+One source of truth on purpose. Registry building previously existed in
+both the redaction pipeline and the IndiaPII benchmark, which meant a
+recognizer added to one was silently absent from the other's scores.
 """
 from __future__ import annotations
 
+import logging
+
 from presidio_analyzer import Pattern, PatternRecognizer
 
-# Base score for values that are only PII because of an adjacent label.
-# +0.35 of context enhancement lands them at 0.45, above the 0.4 default
-# threshold; without a context word they stay at 0.1 and never fire.
 CONTEXT_DEPENDENT_SCORE = 0.1
 
 
@@ -182,3 +161,100 @@ CUSTOM_ENTITIES = (
 
 def build_custom_recognizers() -> list[PatternRecognizer]:
     return [build() for build in CUSTOM_RECOGNIZER_BUILDERS]
+
+
+def build_aadhaar_ocr_fallback_recognizer():
+    """A checksum-free IN_AADHAAR recognizer for OCR-garbled numbers.
+
+    Presidio's InAadhaarRecognizer validates a Verhoeff checksum and DROPS
+    the match outright when it fails — so a single OCR digit error means a
+    real Aadhaar number is not redacted at all.
+
+    The grouped 4-4-4 form scores high enough to fire on its own, because
+    OCR of a two-column form emits every label before every value, which
+    strands the "Aadhaar" context word far from its number and makes
+    context-based scoring unreliable.
+
+    It deliberately carries no look-around guards against matching inside a
+    longer digit run. OCR flattens the page into one string with no field
+    boundaries, so a neighbouring phone number is indistinguishable from a
+    continuation of the same number, and guards drop real Aadhaars. The
+    cost is that a credit card or account number also matches here; those
+    spans are redacted as CREDIT_CARD/DATE_TIME regardless, so the
+    over-match costs label precision in the report, not redaction quality.
+
+    The ungrouped 12-digit form is weaker and still needs context.
+    """
+    from presidio_analyzer import Pattern, PatternRecognizer
+
+    return PatternRecognizer(
+        supported_entity="IN_AADHAAR",
+        name="AadhaarOcrFallbackRecognizer",
+        patterns=[
+            Pattern(
+                "Aadhaar 4-4-4 grouped (no checksum)",
+                r"\b[0-9]{4}[- :][0-9]{4}[- :][0-9]{4}\b",
+                0.5,
+            ),
+            Pattern("Aadhaar 12-digit (no checksum)", r"\b[0-9]{12}\b", 0.2),
+        ],
+        context=["aadhaar", "aadhar", "uidai", "uid"],
+    )
+
+
+INDIA_RECOGNIZER_NAMES = [
+    "InAadhaarRecognizer",
+    "InPanRecognizer",
+    "InVoterRecognizer",
+    "InPassportRecognizer",
+    "InVehicleRegistrationRecognizer",
+    "InGstinRecognizer",
+]
+
+
+
+def build_registry(
+    logger: logging.Logger | None = None,
+    ocr_tolerant_aadhaar: bool = True,
+    medical_ner: bool = False,
+):
+    """Assemble the recognizer registry used by every scorer and the pipeline."""
+    from presidio_analyzer import RecognizerRegistry, predefined_recognizers
+
+    log = logger or logging.getLogger(__name__)
+    registry = RecognizerRegistry()
+    registry.load_predefined_recognizers()
+
+    for name in INDIA_RECOGNIZER_NAMES:
+        registry.add_recognizer(getattr(predefined_recognizers, name)())
+    log.info(
+        "Registered %d India-specific recognizers: %s",
+        len(INDIA_RECOGNIZER_NAMES),
+        ", ".join(INDIA_RECOGNIZER_NAMES),
+    )
+
+    custom = build_custom_recognizers()
+    for recognizer in custom:
+        registry.add_recognizer(recognizer)
+    log.info(
+        "Registered %d custom Indian recognizers: %s",
+        len(custom),
+        ", ".join(sorted({r.supported_entities[0] for r in custom})),
+    )
+
+    if medical_ner:
+        try:
+            from presidio_analyzer.predefined_recognizers import MedicalNERRecognizer
+
+            registry.add_recognizer(MedicalNERRecognizer())
+            log.info("Medical NER enabled (blaze999/Medical-NER)")
+        except Exception:
+            log.exception("Could not load MedicalNERRecognizer — continuing without it")
+
+    if ocr_tolerant_aadhaar:
+        registry.add_recognizer(build_aadhaar_ocr_fallback_recognizer())
+        log.info(
+            "OCR-tolerant Aadhaar fallback enabled "
+            "(catches checksum-invalid numbers near Aadhaar context words)"
+        )
+    return registry

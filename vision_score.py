@@ -33,6 +33,8 @@ from pathlib import Path
 
 from rich.console import Console
 
+from redactor.vision import DEFAULT_MODEL, build_client, encode_image
+
 console = Console()
 
 PROMPT = """You are auditing a redacted document image for a privacy tool.
@@ -79,30 +81,7 @@ SCHEMA = {
 }
 
 
-def load_env(path: Path = Path(".env")) -> None:
-    """Read KEY=value lines from .env without adding a dependency."""
-    if not path.exists():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
-
-
-def media_type(path: Path) -> str:
-    return {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-    }.get(path.suffix.lower(), "image/png")
-
-
 def score_image(client, model: str, image_path: Path, items: list[str]) -> dict:
-    data = base64.standard_b64encode(image_path.read_bytes()).decode("utf-8")
     listed = "\n".join(f"- {v}" for v in items)
 
     response = client.messages.create(
@@ -114,14 +93,7 @@ def score_image(client, model: str, image_path: Path, items: list[str]) -> dict:
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type(image_path),
-                            "data": data,
-                        },
-                    },
+                    encode_image(image_path),
                     {"type": "text", "text": PROMPT.format(items=listed)},
                 ],
             }
@@ -138,30 +110,21 @@ def score_image(client, model: str, image_path: Path, items: list[str]) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_dir")
-    parser.add_argument("--model", default="claude-opus-5")
+    parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--limit", type=int, default=None, help="Only score the first N images"
     )
     args = parser.parse_args()
 
-    load_env()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        console.print(
-            "[red]ANTHROPIC_API_KEY is not set.[/red] Put it in .env as:\n"
-            "  ANTHROPIC_API_KEY=sk-ant-..."
-        )
-        sys.exit(1)
-
     try:
-        import anthropic
-    except ImportError:
-        console.print("[red]pip install anthropic[/red]")
+        client = build_client()
+    except (RuntimeError, ImportError) as exc:
+        console.print(f"[red]{exc}[/red]")
         sys.exit(1)
 
     run_dir = Path(args.run_dir)
     images_dir = run_dir / "images"
     truth = json.loads(Path("ground_truth.json").read_text())
-    client = anthropic.Anthropic()
 
     verdicts: dict[str, dict[str, str]] = {
         "_note": (
