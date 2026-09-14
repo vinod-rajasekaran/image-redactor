@@ -467,3 +467,30 @@ remaining diagnosis leaks closed.
 downloads a model on first use. It also over-redacts mildly — "Ward /
 Bed" and "Age / Sex" labels get caught as clinical terms — which is
 acceptable for redaction but surprising if unexpected.
+
+---
+
+## 2026-09-14 — Best measured configuration: Paddle + all improvements
+
+**Status:** Active (not the default; Tesseract stays default for speed)
+
+**Evidence:** `--ocr paddle --medical-ner` with the custom recognizers
+and reading-order scores **94.1%** redaction recall (80/85), against
+88.2% for the same configuration on Tesseract. `PERSON` and
+`PHONE_NUMBER` leaks fall to zero.
+
+Full progression on the same 20 images: 74.1% (Tesseract PSM 3) → 76.5%
+(PSM 4) → 81.2% (custom recognizers) → 88.2% (reading-order + medical
+NER) → 94.1% (Paddle).
+
+**What remains:** five leaks, all span-boundary failures. Four are
+multi-line or multi-token `LOCATION` values where part of an address is
+redacted and the locality or PIN survives; one is a date. Merging
+adjacent fragments of the same entity into one region is the next fix,
+and it is a geometry problem rather than a recognizer gap.
+
+**Note on method:** this run was predicted to win and did, but two
+earlier predictions in this project did not survive measurement (Paddle
+appearing better on entity counts while leaking more; RapidOCR assumed
+to share Paddle's models). Configurations are not adopted here on
+reasoning alone.

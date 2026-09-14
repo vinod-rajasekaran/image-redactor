@@ -246,15 +246,28 @@ Measured end to end on the same 20 images, Tesseract throughout:
 
 | stage | recall | leaked |
 |---|---:|---:|
-| PSM 3, no custom recognizers | 74.1% | 22 |
-| PSM 4 | 76.5% | 20 |
+| Tesseract PSM 3, no custom recognizers | 74.1% | 22 |
+| Tesseract PSM 4 | 76.5% | 20 |
 | + seven custom Indian recognizers | 81.2% | 16 |
-| + reading-order + medical NER | **88.2%** | **10** |
+| + reading-order + medical NER | 88.2% | 10 |
+| **PaddleOCR + all of the above** | **94.1%** | **5** |
 
-Every remaining leak is now a *detection* problem rather than a coverage
-gap: `LOCATION` 6, `PERSON` 2, `DATE_TIME` 1, `PHONE_NUMBER` 1.
-Multi-line addresses are the dominant failure — a street line is redacted
-while the locality or PIN survives.
+Every remaining leak is a *detection* problem rather than a coverage gap,
+and with Paddle only five survive — all of them span-boundary failures:
+
+| image | entity | value |
+|---|---|---|
+| water bill | LOCATION | `12, 3rd Cross Indiranagar Bengaluru - 560038` |
+| job application | LOCATION | `12, 3rd Cross Indiranagar Bengaluru - 560038` |
+| flight booking | LOCATION | `BLR Bengaluru`, `CCU Kolkata` |
+| flight booking | DATE_TIME | `25 Apr 2025` |
+
+Multi-line addresses are the dominant failure: the street line is
+redacted while the locality or PIN code survives, which is often enough
+to reconstruct the address. Merging adjacent `LOCATION` fragments into a
+single region is the obvious next fix.
+
+Best configuration: `--ocr paddle --medical-ner`.
 
 ## Reading order
 
