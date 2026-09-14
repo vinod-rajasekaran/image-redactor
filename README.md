@@ -49,6 +49,7 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 | `--output` | `output_images` | Folder for redacted images + report |
 | `--threshold` | `0.5` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
+| `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
 | `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback (see below) |
 
 `--threshold` and `--entities` mirror the `threshold` / `entity_types`
@@ -72,9 +73,11 @@ committed.
 
 ## Output
 
-For each input image, a redacted copy is written to the output folder
-under the same filename, with detected PII regions blacked out. The
-run also produces:
+Every input image gets a counterpart in the output folder under the same
+filename, with detected PII regions blacked out. Images where no PII was
+found are copied through unchanged, so the output folder is always a
+complete mirror of the input and a downstream consumer never silently
+loses a file. The run also produces:
 
 - `output_images/redaction_report.json` — per-image results (status,
   detected entity types + counts, average confidence, processing
@@ -138,10 +141,27 @@ and applies no score boost. Any recognizer relying on context words
 degrades on form-style documents — which describes most Indian ID
 documents.
 
-**3. `IN_PASSPORT` cannot fire at the default threshold.** Its base
-pattern scores 0.1 and reaches only ~0.45 even with context words
-present — below the 0.5 default. Indian passport numbers are never
-redacted unless you pass `--threshold 0.4` or lower.
+**3. A 0.5 threshold is precisely the wrong value for Indian IDs.**
+Presidio's context enhancer adds +0.35, and several India recognizers
+use a weak base pattern of 0.1 — so a context-boosted weak match lands
+at exactly **0.45**, just under a 0.5 threshold. Affected: `IN_PASSPORT`
+(always), and `IN_PAN`/`IN_VOTER` whenever the value doesn't satisfy
+the recognizer's strong pattern.
+
+This is not theoretical. On a real photographed PAN card whose number
+OCR'd perfectly as `ABCDE1234F`, **the PAN number was left fully
+visible** at the default threshold — `ABCDE1234F` has `D` as its 4th
+character, which is not a valid PAN holder-type code, so it only
+matched the weak pattern and scored 0.45.
+
+| image | `--threshold 0.5` | `--threshold 0.4` |
+|-------|-------------------|-------------------|
+| real PAN card | nothing | `IN_PAN` ✓ |
+| voter ID | nothing | `IN_VOTER` ✓ |
+
+**Recommendation: run `--threshold 0.4` for Indian ID documents.** The
+default stays 0.5 only so this harness mirrors kaapi-guardrails'
+documented default.
 
 **4. `IN_VEHICLE_REGISTRATION` needs the unspaced form, and OCR breaks
 it.** It matches `KA05MJ4521` but not `KA 05 MJ 4521` (the spaced form
@@ -162,6 +182,25 @@ visible only as `DE1234F` (rather than the full `ABCDE1234F`) does not
 match `IN_PAN`, because the pattern needs the complete
 5-letter/4-digit/1-letter form. Partially visible IDs at frame edges
 pass through unredacted.
+
+**7. Photographed documents need upscaling before OCR.** Tesseract reads
+small photos of documents (~300px wide, shot at an angle) very poorly.
+A real job-application form yielded **zero** detections at native size;
+at 2x it yielded 7, including the phone number. `--upscale` defaults to
+`auto` for this reason, scaling narrow images toward 600px wide for the
+OCR pass only — the saved image keeps its original dimensions.
+
+Upscaling also *improves precision*: on the PAN card, native-size OCR
+produced 9 `PERSON` hits for a card carrying 2 names, because garbled
+text was misread as names. At 2x it produced the correct 4 word-boxes.
+
+**8. OCR errors defeat regex entities generally.** The same failure mode
+as the Aadhaar checksum shows up everywhere: an email OCR'd as
+`oriyasharma@grmal ON` never matches `EMAIL_ADDRESS`, and a vehicle
+registration read as `KAO5MJ4521` (letter `O` for digit `0`) never
+matches. Any recognizer that depends on exact character patterns
+degrades in proportion to OCR quality — which is why image redaction
+cannot be assumed as reliable as text redaction.
 
 ### Relevant to kaapi-guardrails
 

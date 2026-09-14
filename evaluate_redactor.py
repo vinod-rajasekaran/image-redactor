@@ -37,6 +37,12 @@ from rich.table import Table
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 
+# Tesseract reads small photographed documents poorly; upscaling before OCR
+# recovers text it otherwise misses entirely. Narrower inputs than this get
+# scaled up toward it (integer factor, capped) purely for the OCR pass.
+AUTO_UPSCALE_TARGET_WIDTH = 600
+AUTO_UPSCALE_MAX_FACTOR = 3
+
 console = Console()
 
 
@@ -49,6 +55,15 @@ class ImageResult:
     avg_confidence: float | None = None
     error: str | None = None
     duration_seconds: float = 0.0
+    upscale_factor: int = 1
+
+
+def resolve_upscale_factor(width: int, setting: str) -> int:
+    """Pick the OCR upscale factor for an image of this width."""
+    if setting != "auto":
+        return int(setting)
+    factor = round(AUTO_UPSCALE_TARGET_WIDTH / width) if width else 1
+    return max(1, min(AUTO_UPSCALE_MAX_FACTOR, factor))
 
 
 def setup_logging(output_dir: Path) -> logging.Logger:
@@ -193,6 +208,7 @@ def process_image(
     redactor,
     logger: logging.Logger,
     analyzer_kwargs: dict | None = None,
+    upscale: str = "auto",
 ) -> ImageResult:
     from PIL import Image
 
@@ -210,8 +226,17 @@ def process_image(
             duration_seconds=time.monotonic() - start,
         )
 
+    factor = resolve_upscale_factor(image.width, upscale)
+    ocr_image = (
+        image
+        if factor == 1
+        else image.resize(
+            (image.width * factor, image.height * factor), Image.LANCZOS
+        )
+    )
+
     try:
-        analyzer_results = analyzer.analyze(image, **analyzer_kwargs)
+        analyzer_results = analyzer.analyze(ocr_image, **analyzer_kwargs)
     except Exception as exc:
         logger.exception("OCR/analysis failed for %s", path.name)
         return ImageResult(
@@ -219,6 +244,7 @@ def process_image(
             status="failed",
             error=f"analysis_failed: {exc}",
             duration_seconds=time.monotonic() - start,
+            upscale_factor=factor,
         )
 
     entities: dict[str, int] = {}
@@ -228,15 +254,34 @@ def process_image(
         scores.append(result.score)
 
     if not analyzer_results:
-        logger.info("[yellow]%s[/yellow]: no PII entities detected", path.name)
+        # Copy through unchanged so the output folder stays a complete mirror
+        # of the input — a consumer of that folder must not silently lose files.
+        logger.info(
+            "[yellow]%s[/yellow]: no PII entities detected (copied through)",
+            path.name,
+        )
+        try:
+            image.save(output_dir / path.name)
+        except Exception as exc:
+            logger.exception("Copy-through failed for %s", path.name)
+            return ImageResult(
+                filename=path.name,
+                status="failed",
+                error=f"copy_through_failed: {exc}",
+                duration_seconds=time.monotonic() - start,
+                upscale_factor=factor,
+            )
         return ImageResult(
             filename=path.name,
             status="no_pii_found",
             duration_seconds=time.monotonic() - start,
+            upscale_factor=factor,
         )
 
     try:
-        redacted_image = redactor.redact(image, fill=(0, 0, 0), **analyzer_kwargs)
+        redacted_image = redactor.redact(ocr_image, fill=(0, 0, 0), **analyzer_kwargs)
+        if factor != 1:
+            redacted_image = redacted_image.resize(image.size, Image.LANCZOS)
         output_path = output_dir / path.name
         redacted_image.save(output_path)
     except Exception as exc:
@@ -246,14 +291,16 @@ def process_image(
             status="failed",
             error=f"redaction_failed: {exc}",
             duration_seconds=time.monotonic() - start,
+            upscale_factor=factor,
         )
 
     duration = time.monotonic() - start
     logger.info(
-        "[green]%s[/green]: redacted %d entities (%s) in %.2fs",
+        "[green]%s[/green]: redacted %d entities (%s)%s in %.2fs",
         path.name,
         len(analyzer_results),
         ", ".join(sorted(entities)),
+        f" [dim]@{factor}x[/dim]" if factor != 1 else "",
         duration,
     )
     return ImageResult(
@@ -263,6 +310,7 @@ def process_image(
         entity_count=len(analyzer_results),
         avg_confidence=round(sum(scores) / len(scores), 3) if scores else None,
         duration_seconds=duration,
+        upscale_factor=factor,
     )
 
 
@@ -320,6 +368,16 @@ def main() -> None:
         nargs="+",
         default=None,
         help="Restrict detection to these entity types (default: all supported)",
+    )
+    parser.add_argument(
+        "--upscale",
+        default="auto",
+        choices=["auto", "1", "2", "3", "4"],
+        help=(
+            "Upscale factor applied before OCR only (output keeps the original "
+            "size). 'auto' scales narrow images toward %dpx wide; '1' disables"
+            % AUTO_UPSCALE_TARGET_WIDTH
+        ),
     )
     parser.add_argument(
         "--strict-aadhaar",
@@ -385,7 +443,13 @@ def main() -> None:
         for path in image_paths:
             progress.update(task, description=f"Processing [bold]{path.name}[/bold]")
             result = process_image(
-                path, output_dir, analyzer, redactor, logger, analyzer_kwargs
+                path,
+                output_dir,
+                analyzer,
+                redactor,
+                logger,
+                analyzer_kwargs,
+                args.upscale,
             )
             results.append(result)
             progress.advance(task)
@@ -398,6 +462,7 @@ def main() -> None:
         "score_threshold": args.threshold,
         "entities": args.entities or "all_supported",
         "ocr_tolerant_aadhaar": not args.strict_aadhaar,
+        "upscale": args.upscale,
         "total_images": len(results),
         "results": [asdict(r) for r in results],
     }

@@ -60,6 +60,26 @@ detail:
   deliberate one). Generate a valid one by brute-forcing the last
   digit against `InAadhaarRecognizer().validate_result()`.
 
+## Threshold 0.5 is a trap
+
+Presidio's context boost is +0.35 and several India recognizers use a
+0.1 base pattern, so context-boosted weak matches land at exactly
+**0.45** — just under the 0.5 default. Verified: a real PAN card's
+number was left visible at 0.5 and redacted at 0.4; same for a voter ID.
+The default stays 0.5 only for parity with kaapi-guardrails. Recommend
+`--threshold 0.4` whenever the answer matters more than the comparison.
+
+## Upscaling
+
+`--upscale auto` scales narrow images toward 600px wide for the OCR pass
+only; the saved image is resized back to its original dimensions. This
+is load-bearing, not a nicety — a real job-application photo went from
+0 detections at native size to 7 at 2x. It also *raises* precision by
+cutting OCR-garbage false-positive PERSON hits. Don't disable it as a
+"simplification". Note entity **counts** are a poor quality metric here:
+both misses and false positives move them, so inspect entity *types* and
+the output images.
+
 ## Aligning with kaapi-guardrails
 
 Sibling project `ProjectTech4DevAI/kaapi-guardrails` has a
