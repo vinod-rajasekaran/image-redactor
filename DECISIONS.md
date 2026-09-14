@@ -947,3 +947,59 @@ headline recall has been corrected six times; each correction is recorded
 with what was wrong and why. That record has proven more useful than any
 individual number, because the same failure — a measurement that shares
 the tool's blind spots — kept recurring in new disguises.
+
+---
+
+## 2026-09-14 — Two more open datasets, both permissively licensed
+
+**Status:** Active
+
+Searched for open Indian PII datasets under MIT or Apache-2.0 —
+IndiaPII-Bench, already in use, is CC-BY-4.0. Two qualify.
+
+**`somukandula/maskara-indian-pii-200k` — MIT, text.** 268k rows,
+character-level spans, 17 entity types including AADHAAR, PAN_CARD,
+UPI_ID and VEHICLE_REG. Fully synthetic, with a `real_world_eval` split
+that is not template-generated, hard negatives, and — the reason it earns
+a place beside IndiaPII-Bench — an **`ocr` domain of deliberately
+OCR-corrupted text**. `benchmark_maskara.py` runs it.
+
+Result on the 2,600-row real-world split: **75.6% overall**. The `ocr`
+domain scores **93%, the highest of any domain**, which is direct
+evidence for the OCR-tolerant Aadhaar fallback rather than the indirect
+argument that has justified it so far.
+
+Gaps it exposes, and they are mostly one gap:
+
+| entity | recall | why |
+|---|---:|---|
+| DRIVER_LICENSE | 0% | their `DLFY1997840749` puts letters where our regex expects RTO digits |
+| VEHICLE_REG | 22% | spaced form `AP 51 NK 6401` — we only match unspaced |
+| PHONE | 66% | `(+91) 01770 42568` defeats Presidio's phone recognizer |
+| PAN_CARD | 70% | spaced form `AGNVL 0925 B` |
+| UPI_ID | 62% | no recognizer; partially caught as EMAIL |
+
+**Spacing is the theme.** PAN and vehicle registration both fail on spaced
+forms, which people genuinely write and OCR genuinely produces. That is a
+real fix, not an artefact of their generator. The driving-licence format
+is arguably theirs being non-standard — worth matching loosely rather
+than contorting our regex to it.
+
+Hard negatives: 86/200 flagged, higher than IndiaPII-Bench's 3% on the
+mimicked type. Not yet broken down by cause.
+
+**`jaganadhg/cheque-synthetic-images` — Apache-2.0, images.** 295
+synthetic Indian cheques across four bank layouts, with ground-truth
+bounding boxes for payee name, account number, IFSC, date, amount and
+signature. Not yet used.
+
+It is worth more than its size suggests: it is an **image** set with
+**human-authored boxes**, so it can measure per-region coverage — the
+metric that had to be abandoned because vision-generated boxes were off by
+about a text row. It would also be the first test data here that nobody
+on this project labelled.
+
+**A licence caveat:** the paper announcing it states CC-BY-SA-4.0 in its
+metadata while the Hugging Face card says `apache-2.0`. The companion
+`cheque-field-annotations` set (real cheques) is licensed `other` and
+should be left alone. Confirm the licence before depending on it.
