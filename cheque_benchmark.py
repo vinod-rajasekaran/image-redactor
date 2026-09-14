@@ -55,7 +55,11 @@ PARQUET_URL = (
     "https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images/"
     "resolve/main/data/test-00000-of-00001.parquet"
 )
-CACHE = datasets.ROOT / "text" / "cheques_test.parquet"
+# A download cache, not a corpus — the 10 cheques it unpacks to are
+# committed. It lived under datasets/text/ once, where 95MB of PNG bytes
+# in a folder named for text corpora was both misleading and the only
+# reason that folder was excluded from git.
+CACHE = datasets.ROOT / ".cache" / "cheques_test.parquet"
 IMAGE_DIR = datasets.ROOT / "cheques" / "images"
 REGIONS = datasets.ROOT / "cheques" / "annotations.json"
 

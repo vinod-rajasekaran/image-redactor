@@ -202,10 +202,10 @@ cython_debug/
 
 # Cheque benchmark working data
 
-# Validation corpora are committed — all three are fully synthetic, and a
-# benchmark nobody can re-run is not a benchmark. The cheque corpus was
-# trimmed 20 -> 10 images to make that affordable. Only text/ is excluded:
-# 93MB of third-party benchmark parquets, download-on-demand.
-# See datasets/README.md for licence and provenance per corpus.
+# Validation corpora are committed — every one is fully synthetic, and a
+# benchmark nobody can re-run is not a benchmark. Excluded: third-party
+# data this project neither generated nor re-derives, which is fetched on
+# demand instead. See datasets/README.md for licence and provenance.
 datasets/text/
+datasets/.cache/
 input_annotations.json

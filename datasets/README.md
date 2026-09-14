@@ -17,7 +17,7 @@ is where a script reads it from.
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic |
 | `pack/` | 20 | yes | box | `generate_synthetic_indian_pii_images.py` — pack authored with Claude, generated locally | fully synthetic |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
-| `text/` | 2 corpora + 1 cache | no | spans | IndiaPII-Bench; maskara-indian-pii-200k; plus the cheque source parquet | CC-BY-4.0; MIT; Apache-2.0 |
+| `text/` | 2 files, 2.2MB | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
 
 `text/` holds documents as **plain text with character-offset spans**, no
 images. That is the point: fed straight to `AnalyzerEngine.analyze()`,
@@ -27,9 +27,11 @@ and `hard_negative` decoys, which is how the Aadhaar OCR-tolerance was
 justified and how the PAN spacing gap was pinned on the pattern rather
 than the reader.
 
-`cheques_test.parquet` sits there too but is not a text corpus — it is the
-95MB source the cheque images are unpacked from, and since those are now
-committed it is only a cache for fetching a larger slice.
+`datasets/.cache/` holds downloads that are not corpora — currently the
+95MB parquet the cheque images unpack from. It used to sit in `text/`,
+where 95MB of PNG bytes in a folder named for text corpora was both
+misleading and the sole reason that folder was excluded from git. Deleting
+anything in `.cache/` is always safe; the fetch step rebuilds it.
 
 Images 11–20 *imitate* photographed pages — perspective, glare, low
 contrast — and the notes elsewhere call them photographs for that reason.
@@ -37,7 +39,7 @@ That is rendered appearance, not a camera: they are the hardest images
 here precisely because a generator was asked to make them look shot in
 poor light.
 
-## Size, and the one exclusion
+## Size, and what stays out
 
 All three image corpora are committed, so every image figure in
 `DECISIONS.md` reproduces from a clone with no downloads. `documents/` and
@@ -52,11 +54,10 @@ most of this repo:
   to both the OCR and the coverage measurement — that is a re-measurement,
   not a compression
 
-**`text/` is the exclusion**: 95MB of it is the cheque source parquet and
-2MB the two text benchmarks, all third-party and all fetched by
-`benchmark_indiapii.py` and `benchmark_maskara.py` per their docstrings.
-Those are span-annotated text, not images, and nothing here re-derives
-them.
+**The exclusions are third-party data this project did not generate**:
+`text/` (2.2MB, fetched by `benchmark_indiapii.py` and `benchmark_maskara.py`
+per their docstrings) and `datasets/.cache/`. Both are one command to
+restore, and neither is re-derived from anything here.
 
 Redistributing the cheques is fine under Apache-2.0; the licence and the
 upstream URL are recorded in `cheques/annotations.json` under `_meta`.

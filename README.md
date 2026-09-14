@@ -70,10 +70,9 @@ the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
 Validation corpora live under `datasets/` — images and annotations
 together, one schema, one loader. Every image is synthetic: no real
-person, document or account appears anywhere in this repo. `documents/`
-and `pack/` are committed, so the benchmark is reproducible from a clone
-alone. `cheques/` keeps its annotations and provenance tracked but fetches
-its 87MB of Apache-2.0 images from the source, and `text/` is
+person, document or account appears anywhere in this repo. All four image
+corpora are committed, so every image benchmark below reproduces from a
+clone alone; only `text/`, 93MB of third-party parquets, is
 download-on-demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
 
@@ -141,11 +140,11 @@ skipped rather than aborting the batch.
 ## Measuring leakage, not detections
 
 Entity counts cannot tell you what fraction of PII was caught: they move
-on both misses and false positives. `ground_truth.json` records the PII
-actually present in each image — the synthetic half derived from the
-generator so it cannot drift, the real half labelled by reading the
-documents. Scoring reads the **output** back and asks, per item, whether
-it is still legible.
+on both misses and false positives. Each corpus's `annotations.json`
+records the PII actually present in each image — derived from the
+generator where one drew the values, read back off the page where a model
+rendered them, hand-labelled otherwise. Scoring reads the **output** back
+and asks, per item, whether it is still legible.
 
 An item is `leaked` only when readable in the output, `redacted` only when
 readable before and not after, and `unverifiable` otherwise. Results come
@@ -240,7 +239,7 @@ Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
 models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
 they share a model lineage was wrong.
 
-**Cheques** — 20 synthetic Indian cheques
+**Cheques** — 10 synthetic Indian cheques
 ([`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images),
 Apache-2.0) with human-authored field boxes. The first test data here that
 nobody on this project labelled:
@@ -342,9 +341,11 @@ redactor/            the package
   runs.py            run folders, config.json, summary.json
   vision.py          shared Claude client and .env loading
   datasets.py        corpus loader and the one annotation schema
+  synth.py           fake Indian names, numbers and addresses
 
 evaluate_redactor.py        the CLI
-generate_test_images.py     synthetic Indian documents
+generate_test_images.py     synthetic Indian documents (Pillow, flat)
+generate_openai_documents.py  synthetic documents (OpenAI, photoreal)
 build_ground_truth.py       what PII each image contains
 score_run.py                leakage scoring
 vision_score.py             ask Claude what survived
