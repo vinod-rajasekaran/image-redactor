@@ -32,7 +32,7 @@ def clamp_box(x: int, y: int, w: int, h: int, size: tuple[int, int]) -> tuple:
 
 # Haar face boxes hug the eyes/nose and routinely clip chin, hair and ears,
 # which leaves a recognisable sliver behind; codes need only a small margin.
-PAD_RATIO = {"face": 0.30, "qr_code": 0.08, "barcode": 0.08}
+PAD_RATIO = {"face": 0.30, "signature": 0.15, "qr_code": 0.08, "barcode": 0.08}
 
 
 def region_box(r: VisualRegion, size: tuple[int, int]) -> tuple:

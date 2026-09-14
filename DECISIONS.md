@@ -1047,3 +1047,51 @@ and only independent test data could show that.
 from vision-generated boxes, which were off by about a text row. Given
 trustworthy boxes it produced a signal that matched what the eye sees,
 without a model call. The distinction was the box quality, not the metric.
+
+---
+
+## 2026-09-14 — Signature detection
+
+**Status:** Active, on by default
+
+`detect_signatures()` in `redactor/detect.py`. Signature coverage on the
+cheque benchmark rises from **13% to 51%**, with **zero false positives**
+on the main corpus and its recall unchanged at 93.5%.
+
+**Why it was needed:** a signature is personal data and nothing looked for
+one. The cheque benchmark measured 13% of signature area redacted, and the
+ground-truth auditor had separately flagged an unlabelled signature on a
+PAN card.
+
+**Pure shape analysis was tried and rejected.** Ranking every connected
+component by how much it sprawls put the true signature at rank 3-8 on the
+sample cheques, so taking the top few would have blacked out unrelated
+ink.
+
+**What works is label-anchored.** OCR already reads the page; a signature
+cue word ("sign", "signature", "signatory") says *where to look*, and
+connected components find the ink. No page geometry is assumed, so the
+same code works on a cheque, a card or a prescription. Cue words are
+matched as whole tokens — "signs and symptoms" on a medical note must not
+summon a box.
+
+**A false positive caught before shipping.** The first version boxed the
+entire *label column* of a PAN card: dilation had merged Name/Father's
+Name/DOB/PAN/Signature into one sprawling blob that scored well on area
+and fill. Rendering the box over the source image showed it immediately.
+
+The fix uses a measurement made earlier while characterising the problem:
+cursive connects and print does not. A signature region averages ~24
+connected components with 56% of its ink in the largest; a printed name
+field averages ~239 with 15%. Candidates are now checked against the
+*undilated* ink and rejected if they look like print.
+
+**The trade taken:** that check cost 2 of 15 detections (15/20 → 13/20)
+and removed the false positive. Accepted deliberately. The usual
+preference here is recall over precision, but a *misplaced* box is not
+over-redaction — it damages the document without protecting anything, so
+placement is judged on precision.
+
+**Its ceiling is the label.** The misses are the cheques where OCR never
+read the cue word. A signature with no printed label nearby will not be
+found.
