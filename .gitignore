@@ -136,6 +136,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Image redactor evaluation data (may contain real PII from user-supplied images)
+input_images/
+output_images/
+
 # Spyder project settings
 .spyderproject
 .spyproject

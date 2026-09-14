@@ -1,0 +1,6 @@
+presidio-analyzer
+presidio-image-redactor
+pytesseract
+Pillow
+spacy
+rich
