@@ -370,3 +370,33 @@ cost into `runs/benchmark.json`.
 
 **Why:** OCR choices had been argued from entity counts and single-image
 spot checks, both of which had already produced wrong conclusions.
+
+---
+
+## 2026-09-14 — Explicit metadata stripping, with a regression guard
+
+**Status:** Active
+
+`image_hygiene.sanitize_for_processing()` applies EXIF orientation and
+returns a metadata-free image; `save_clean()` writes without carrying
+metadata across. `test_metadata_stripping.py` guards both.
+
+**Why:** a redacted image can leak through its container rather than its
+pixels. Phone photos carry GPS and frequently an embedded thumbnail — a
+copy of the image *as it was before* anything was blacked out.
+
+**Evidence, and a correction:** this was first written into the README as
+a known limitation ("EXIF is not stripped") **without being tested. That
+claim was wrong.** Constructing a JPEG with GPS, device tags and an
+embedded thumbnail and running it through both the redaction and
+copy-through paths showed the output already clean — Pillow does not
+propagate `info["exif"]` unless a caller passes it to `save()`.
+
+The guardrail was still worth adding, because that safety was
+*incidental*. A single `save(**img.info)` would reintroduce the leak
+silently. The tests were verified to fail when the protection is removed,
+so they guard something real rather than passing vacuously.
+
+Orientation is applied rather than discarded, which also helps detection:
+a phone photo tagged "rotate 90" is stored sideways, and OCR of a
+sideways page finds almost nothing.

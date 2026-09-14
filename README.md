@@ -213,9 +213,12 @@ rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
 - **Visual detection false-positives.** QR detection fires on some dense
   text blocks. These over-redact regions that were PII anyway, which is
   the intended trade, but the counts are not precision measurements.
-- **EXIF is not stripped.** Phone-camera inputs can carry GPS and an
-  embedded thumbnail of the *original* image. Not an issue for the
-  current PNG test set, but a real leak for real uploads.
+- **Metadata is stripped, and now guarded.** Phone photos carry GPS,
+  device IDs and often an embedded thumbnail of the image *before*
+  redaction. Output is metadata-free and EXIF orientation is baked into
+  the pixels rather than discarded, so a sideways photo is OCR'd upright.
+  `test_metadata_stripping.py` is the regression guard — it fails if the
+  protection is removed.
 
 ## Benchmark: OCR backends, measured by leakage
 
@@ -275,6 +278,8 @@ detected. And with the documented default `threshold: 0.5`,
 - `build_ground_truth.py` → `ground_truth.json` — the PII each image holds
 - `score_run.py` — scores a run for leakage, writes `score.json`
 - `benchmark_ocr.py` — runs every OCR config and tabulates recall vs cost
+- `image_hygiene.py` + `test_metadata_stripping.py` — EXIF/GPS/thumbnail
+  stripping and its regression guard
 - `setup.sh` — one-time environment setup
 - `DECISIONS.md` — time-ordered log of every decision and its evidence
 - `docs/superpowers/specs/` — original design spec

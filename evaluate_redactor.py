@@ -244,6 +244,7 @@ def process_image(
 ) -> ImageResult:
     from PIL import Image
 
+    from image_hygiene import sanitize_for_processing, save_clean
     from visual_redaction import detect_visual_pii, redact_regions
 
     analyzer_kwargs = analyzer_kwargs or {}
@@ -251,6 +252,9 @@ def process_image(
     try:
         image = Image.open(path)
         image.load()
+        # Orientation baked in, EXIF/GPS/thumbnail dropped, before anything
+        # else touches the image — so no later path can carry them through.
+        image = sanitize_for_processing(image)
     except Exception as exc:
         logger.error("[red]Failed to open %s: %s[/red]", path.name, exc)
         return ImageResult(
@@ -308,7 +312,7 @@ def process_image(
             path.name,
         )
         try:
-            image.save(output_dir / path.name)
+            save_clean(image, output_dir / path.name)
         except Exception as exc:
             logger.exception("Copy-through failed for %s", path.name)
             return ImageResult(
@@ -337,7 +341,7 @@ def process_image(
         if regions:
             redacted_image = redact_regions(redacted_image, regions)
         output_path = output_dir / path.name
-        redacted_image.save(output_path)
+        save_clean(redacted_image, output_path)
     except Exception as exc:
         logger.exception("Redaction/save failed for %s", path.name)
         return ImageResult(
