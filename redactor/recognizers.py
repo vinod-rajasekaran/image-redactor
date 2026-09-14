@@ -138,6 +138,70 @@ def medical_registration_recognizer() -> PatternRecognizer:
     )
 
 
+def land_record_recognizer() -> PatternRecognizer:
+    """Survey / khasra / khata numbers — the plot identifier in land records.
+
+    **There is no single format, and this does not pretend to know one.**
+    The same concept is a survey number in the south and west, a khasra in
+    the north, a khesra in the east and a dag in the northeast; ownership
+    records are jamabandi, khatauni, khatian, pahani or a 7/12 extract
+    depending on the state. Writing a shape regex from any one of those
+    would fit whichever state or generator it was copied from and mislead
+    everywhere else.
+
+    So this leans on the labels, which *are* well documented, exactly as
+    IN_BANK_ACCOUNT does — that reached 100% on an independent benchmark
+    without knowing any bank's numbering scheme. A subdivided number like
+    ``123/4A`` is distinctive enough to score higher than a bare digit run,
+    but neither fires without a label nearby.
+    """
+    return PatternRecognizer(
+        supported_entity="IN_LAND_RECORD",
+        name="InLandRecordRecognizer",
+        patterns=[
+            # 123/4A, 45/2 — a plot and its subdivision
+            Pattern("survey no with subdivision", r"\b\d{1,5}/\d{1,4}[A-Za-z]?\b", 0.3),
+            # a bare plot number; only ever meaningful beside its label
+            Pattern("survey no", r"\b\d{2,6}\b", CONTEXT_DEPENDENT_SCORE),
+        ],
+        context=[
+            "survey", "sy no", "khasra", "khesra", "khata", "khatauni",
+            "khewat", "dag", "jamabandi", "patta", "chitta", "pahani",
+            "satbara", "plot", "land", "revenue", "village",
+        ],
+    )
+
+
+def property_registration_recognizer() -> PatternRecognizer:
+    """Sub-registrar document / registration numbers.
+
+    Issued per Sub-Registrar Office, typically a serial and a year, so the
+    scheme varies by office rather than merely by state. Same treatment:
+    a permissive shape, and the label does the work.
+    """
+    return PatternRecognizer(
+        supported_entity="IN_PROPERTY_REGISTRATION",
+        name="InPropertyRegistrationRecognizer",
+        patterns=[
+            # 1234/2021 — serial and year, the most common written form
+            Pattern("doc no / year", r"\b\d{1,6}\s*/\s*(?:19|20)\d{2}\b", 0.3),
+            # A prefix, a year and a serial — but the order of the last
+            # two varies between offices (REG-2026-28726 and REG-28726-2026
+            # are both plausible and neither is canonical), so accept
+            # either rather than fit to whichever example is at hand.
+            Pattern(
+                "sro alphanumeric",
+                r"\b[A-Z]{2,6}[-/](?:(?:19|20)\d{2}[-/]\d{1,7}|\d{1,7}[-/](?:19|20)\d{2})\b",
+                0.3,
+            ),
+        ],
+        context=[
+            "registration", "registered", "sub-registrar", "subregistrar",
+            "sro", "deed", "document", "encumbrance", "conveyance",
+            "sale deed", "property",
+        ],
+    )
+
 CUSTOM_RECOGNIZER_BUILDERS = (
     ifsc_recognizer,
     driving_licence_recognizer,
@@ -146,6 +210,8 @@ CUSTOM_RECOGNIZER_BUILDERS = (
     pnr_recognizer,
     policy_number_recognizer,
     medical_registration_recognizer,
+    land_record_recognizer,
+    property_registration_recognizer,
 )
 
 CUSTOM_ENTITIES = (
@@ -156,6 +222,8 @@ CUSTOM_ENTITIES = (
     "IN_PNR",
     "IN_POLICY_NUMBER",
     "IN_MEDICAL_REG",
+    "IN_LAND_RECORD",
+    "IN_PROPERTY_REGISTRATION",
 )
 
 

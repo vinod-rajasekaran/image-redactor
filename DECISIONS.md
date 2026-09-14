@@ -1095,3 +1095,50 @@ placement is judged on precision.
 **Its ceiling is the label.** The misses are the cheques where OCR never
 read the cue word. A signature with no printed label nearby will not be
 found.
+
+---
+
+## 2026-09-14 — Land record and property registration recognizers
+
+**Status:** Active
+
+`IN_LAND_RECORD` (survey / khasra / khata numbers) and
+`IN_PROPERTY_REGISTRATION` (sub-registrar document numbers). On the
+synthetic document pack, `SURVEY_NUMBER` coverage goes **0% → 77%** and
+`LAND_REGISTRATION_NUMBER` **0% → 100%**; overall pack coverage 86% → 90%.
+Main corpus unchanged at 93.5%, and IndiaPII-Bench decoys unchanged at 4%.
+
+**Why they are context-anchored rather than shape-matched.** There is no
+single format to match. The plot identifier is a survey number in the
+south and west, a khasra in the north, a khesra in the east and a dag in
+the northeast; ownership records are jamabandi, khatauni, khatian, pahani
+or a 7/12 extract by state; registration numbers are issued per
+Sub-Registrar Office, so the scheme varies by office rather than merely by
+state. Real formats would have to come from state portals — Bhulekh,
+Dharani, Kaveri, Mahabhulekh — each documenting its own.
+
+A regex written without that research would have been fitted to whatever
+the nearest example invented, passing its own benchmark and telling us
+nothing about real documents. That is the RapidOCR mistake — assuming a
+format from a plausible source and finding out only after measuring.
+
+So these follow the pattern already validated for `IN_BANK_ACCOUNT`, which
+reached 100% on an independent benchmark without knowing any bank's
+numbering scheme: a permissive shape, a base score too low to fire alone,
+and the well-documented *labels* doing the work.
+
+**Confirmed mid-build.** The first registration pattern assumed
+prefix-serial-year and missed `REG-2026-28726`, which is
+prefix-year-serial. Rather than flip it to match the example in hand —
+fitting to a generator again — the pattern now accepts either order, since
+neither is canonical and the label gates it regardless.
+
+**Two limitations, accepted openly when this was agreed:**
+
+- It only fires next to a label. A bare survey number in free text is
+  missed, by design.
+- **There is no independent test data for it.** The only corpus exercising
+  these entities is the same synthetic pack that prompted them, so the
+  77% and 100% above prove the recognizers work *on that generator* and
+  nothing more. Real land documents would settle it, and bring back the
+  provenance problem that ruled out the Roboflow Aadhaar set.
