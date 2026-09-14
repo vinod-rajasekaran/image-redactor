@@ -139,6 +139,7 @@ venv.bak/
 # Image redactor evaluation data (may contain real PII from user-supplied images)
 input_images/
 output_images/
+runs/
 
 # Spyder project settings
 .spyderproject

@@ -14,6 +14,18 @@ ImageRedactorEngine). Entirely local, no cloud calls. Design spec:
 - `evaluate_redactor.py` — main CLI. `process_image()` is the
   per-image pipeline (open → analyze → redact → save), `main()` wires
   up argparse, logging, the progress bar, and the summary/report.
+- `ocr_backends.py` — `build_ocr()` returns a Presidio `OCR` subclass.
+  Paddle returns *line* boxes, so `_split_line_into_words()` divides
+  them across words by character count; without that, one PII word
+  blacks out its whole line.
+- `visual_redaction.py` — faces (Haar) and QR/barcodes. Detection is
+  deliberately preferred over decoding: pyzbar decoded none of the
+  sample QR codes, but `cv2.QRCodeDetector` located them, which is all
+  redaction needs. `PAD_RATIO` pads faces 30% because Haar boxes clip
+  chin/hair and leave a recognisable sliver.
+- `runs/<name>/` — each run writes `config.json` (inputs),
+  `summary.json` (config + results), `run.log`, `images/`. Gitignored:
+  may contain real PII.
 - `generate_test_images.py` — Pillow-based synthetic document
   generator. `DOCUMENTS` is a list of dicts fed to `render_document()`;
   add new synthetic test docs by appending to that list, not by

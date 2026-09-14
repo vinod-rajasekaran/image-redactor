@@ -4,3 +4,12 @@ pytesseract
 Pillow
 spacy
 rich
+
+# Visual PII (--visual-pii): faces and QR/barcodes
+opencv-python
+pyzbar
+
+# Alternative OCR backend (--ocr paddle). Large (~500MB) and CPU-slow,
+# but markedly better on photographed/tilted documents.
+paddleocr
+paddlepaddle

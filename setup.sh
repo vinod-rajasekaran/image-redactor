@@ -16,6 +16,13 @@ else
   echo "tesseract already installed."
 fi
 
+if ! brew list zbar >/dev/null 2>&1; then
+  echo "Installing zbar (barcode decoding for --visual-pii)..."
+  brew install zbar
+else
+  echo "zbar already installed."
+fi
+
 if ! command -v python3.12 >/dev/null 2>&1; then
   echo "Installing python@3.12 (spaCy/Presidio need <3.13 wheels)..."
   brew install python@3.12

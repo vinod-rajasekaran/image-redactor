@@ -46,7 +46,10 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input` | `input_images` | Folder of images to redact |
-| `--output` | `output_images` | Folder for redacted images + report |
+| `--runs-dir` | `runs` | Parent folder; each run gets its own subfolder |
+| `--run-name` | timestamp + settings | Name for this run's folder |
+| `--ocr` | `tesseract` | OCR backend: `tesseract` or `paddle` |
+| `--visual-pii` | off | Also redact faces and QR/barcodes (OpenCV + pyzbar) |
 | `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
 | `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
@@ -75,18 +78,26 @@ committed.
 
 ## Output
 
-Every input image gets a counterpart in the output folder under the same
-filename, with detected PII regions blacked out. Images where no PII was
-found are copied through unchanged, so the output folder is always a
-complete mirror of the input and a downstream consumer never silently
-loses a file. The run also produces:
+Each run writes a self-describing folder so results stay reproducible and
+comparable:
 
-- `output_images/redaction_report.json` — per-image results (status,
-  detected entity types + counts, average confidence, processing
-  time, and any error)
-- `output_images/run.log` — full run log (console output is also
-  colorized via `rich`, with a live progress bar and a summary table/panel
-  at the end)
+```
+runs/<run-name>/
+  config.json    # exactly what this run was asked to do
+  summary.json   # totals, per-entity counts, per-image results
+  run.log        # full log
+  images/        # redacted images
+```
+
+`config.json` records the OCR backend, threshold, entity list, upscale
+setting, visual-PII flag, image count, and platform/Python versions —
+enough to reproduce or audit the run later. `summary.json` embeds that
+same config alongside the results, so a single file is self-contained.
+
+Every input image gets a counterpart in `images/` under the same
+filename, with detected PII regions blacked out. Images where no PII was
+found are copied through unchanged, so the folder is always a complete
+mirror of the input and a downstream consumer never silently loses a file.
 
 A per-image failure (corrupt file, unreadable format) is logged and
 skipped — it does not stop the batch. Exit code is `2` if any image
@@ -176,8 +187,20 @@ the regex. No OCR-tolerant fallback is provided for this one.
 Aadhaar card it correctly redacts name, DOB and the number, but leaves
 the **photo** and the **QR code** fully intact. An Aadhaar QR encodes
 the holder's name, DOB and address, so a card redacted this way is not
-meaningfully redacted. Any ID-document workflow needs separate face and
-barcode/QR handling on top of Presidio.
+meaningfully redacted.
+
+`--visual-pii` closes this gap (see `visual_redaction.py`): OpenCV Haar
+cascades for faces, `cv2.QRCodeDetector` for QR regions, pyzbar for
+barcodes. Two notes from building it:
+
+- **Detection matters more than decoding.** pyzbar decoded none of the
+  QR codes in the sample set — decorative or low-resolution codes are
+  exactly the ones it refuses — but `cv2.QRCodeDetector` still *located*
+  them, which is all redaction needs. Relying on decode alone would have
+  redacted nothing.
+- **Haar face boxes are too tight.** They hug the eyes and nose and clip
+  chin, hair and ears, leaving a recognisable sliver. Faces are padded
+  30% (`PAD_RATIO`); don't reduce that without looking at the output.
 
 **6. Cropped or truncated values defeat pattern recognizers.** A PAN
 visible only as `DE1234F` (rather than the full `ABCDE1234F`) does not
@@ -203,6 +226,36 @@ registration read as `KAO5MJ4521` (letter `O` for digit `0`) never
 matches. Any recognizer that depends on exact character patterns
 degrades in proportion to OCR quality — which is why image redaction
 cannot be assumed as reliable as text redaction.
+
+### Benchmark: OCR backend × visual PII
+
+All four combinations over the same 20 images (10 synthetic, 10 photos of
+Indian documents):
+
+| run | entities | EMAIL | PHONE | visual | no PII found | seconds |
+|-----|---------:|------:|------:|-------:|-------------:|--------:|
+| tesseract, text only | 205 | 1 | 25 | 0 | 2 | 12.5 |
+| tesseract + visual   | 205 | 1 | 7  | 7 | 2 | 13.4 |
+| paddle, text only    | **234** | **3** | **27** | 0 | **0** | 285.3 |
+| paddle + visual      | **234** | **3** | **27** | 7 | **0** | 289.5 |
+
+PaddleOCR finds ~14% more entities and, more importantly, fixes the
+specific misses Tesseract had:
+
+- **the garbled email** (`priya.sharma@gmail.com`, previously OCR'd as
+  `oriyasharma@grmal ON`) is now read and redacted
+- **the laptop-screen loan form** went from **0 detections to 8**
+  (name, email, DOB, URL) — Tesseract could not read it at all
+- **`IN_VEHICLE_REGISTRATION`** now matches, because Paddle reads
+  `KA05MJ4521` rather than Tesseract's `KAO5MJ4521` (letter `O`)
+- **`IN_PASSPORT`** now fires on the synthetic job application
+
+The cost is speed: **~23x slower** (285s vs 12.5s for 20 images), since
+it runs detection and recognition models on CPU. Visual PII is
+independent of the OCR choice and costs ~1 second for all 20 images.
+
+Recommendation: `--ocr paddle --visual-pii` when redaction quality
+matters, plain `tesseract` for quick iteration.
 
 ### Relevant to kaapi-guardrails
 
