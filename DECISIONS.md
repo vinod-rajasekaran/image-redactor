@@ -400,3 +400,70 @@ so they guard something real rather than passing vacuously.
 Orientation is applied rather than discarded, which also helps detection:
 a phone photo tagged "rotate 90" is stored sideways, and OCR of a
 sideways page finds almost nothing.
+
+---
+
+## 2026-09-14 — Seven custom Indian pattern recognizers
+
+**Status:** Active
+
+`custom_recognizers.py` adds `IN_IFSC`, `IN_DRIVING_LICENCE`,
+`IN_BANK_ACCOUNT`, `IN_PATIENT_ID`, `IN_PNR`, `IN_POLICY_NUMBER`,
+`IN_MEDICAL_REG`.
+
+**Why:** ground-truth scoring identified twelve values no Presidio
+recognizer claims, seven of which leaked.
+
+**Evidence:** recall 76.5% → **81.2%**; the no-recognizer bucket went
+from 7 leaked to 2 (both free-text diagnoses).
+
+**Design note:** the two with distinctive shapes (IFSC's mandatory `0`
+in position five, the driving-licence state/RTO prefix) fire unaided.
+The rest are shapeless — an account number is a digit run, a PNR is six
+alphanumerics — so they carry a 0.1 base score and depend on the +0.35
+context boost to clear the 0.4 threshold. Negative controls confirm they
+stay silent without a label nearby.
+
+---
+
+## 2026-09-14 — Reading-order normalisation
+
+**Status:** Active
+
+Wrap every OCR backend to re-sort words top-to-bottom, then
+left-to-right.
+
+**Why:** the context dependency above is only safe if OCR emits each
+label beside its value. Tesseract PSM 3 emits every label and then every
+value, stranding context words and silently disabling every
+context-scored recognizer. PSM 4 happens to order correctly — which is
+most of why it beat PSM 3 — but that was luck, not a guarantee.
+
+**Evidence:** on the hospital report under PSM 3, ordering went from
+`Patient Name: Age / Sex: Address: ... Mohammed Irfan Ali 52 / Male` to
+`Patient Name: Mohammed Irfan Ali Age / Sex: 52 / Male Address: ...`.
+It is a no-op where ordering was already correct.
+
+**Bug found while building it:** the first version grouped rows using
+every entry in Tesseract's `image_to_data`, which interleaves
+page/block/paragraph/line rows carrying empty text and page-spanning
+boxes. Their heights swamped the row tolerance and scrambled the output.
+It now groups word-level entries only.
+
+---
+
+## 2026-09-14 — Medical NER for clinical free text (opt-in)
+
+**Status:** Active, off by default (`--medical-ner`)
+
+**Why:** a diagnosis is free text, not a pattern — no regex reaches it.
+Presidio ships `MedicalNERRecognizer`, wrapping HuggingFace
+`blaze999/Medical-NER`.
+
+**Evidence:** with reading-order, recall 81.2% → **88.2%**. Both
+remaining diagnosis leaks closed.
+
+**Why not on by default:** it pulls in transformers and torch and
+downloads a model on first use. It also over-redacts mildly — "Ward /
+Bed" and "Age / Sex" labels get caught as clinical terms — which is
+acceptable for redaction but surprising if unexpected.

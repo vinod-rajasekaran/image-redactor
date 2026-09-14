@@ -64,6 +64,7 @@ python evaluate_redactor.py --input path/to/images --runs-dir path/to/runs
 | `--ocr` | `tesseract` | OCR backend: `tesseract`, `paddle` or `rapidocr` |
 | `--psm` | `4` | Tesseract page-segmentation mode (3, 4, 6, 11, 12) |
 | `--no-visual-pii` | off | Skip face and QR/barcode redaction (on by default) |
+| `--no-reading-order` | off | Skip re-sorting OCR words into reading order (on by default) |
 | `--pyzbar` | off | Also decode code payloads with pyzbar (needs `zbar`) |
 | `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
@@ -238,6 +239,40 @@ rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
   the pixels rather than discarded, so a sideways photo is OCR'd upright.
   `test_metadata_stripping.py` is the regression guard — it fails if the
   protection is removed.
+
+## What raised recall, in order
+
+Measured end to end on the same 20 images, Tesseract throughout:
+
+| stage | recall | leaked |
+|---|---:|---:|
+| PSM 3, no custom recognizers | 74.1% | 22 |
+| PSM 4 | 76.5% | 20 |
+| + seven custom Indian recognizers | 81.2% | 16 |
+| + reading-order + medical NER | **88.2%** | **10** |
+
+Every remaining leak is now a *detection* problem rather than a coverage
+gap: `LOCATION` 6, `PERSON` 2, `DATE_TIME` 1, `PHONE_NUMBER` 1.
+Multi-line addresses are the dominant failure — a street line is redacted
+while the locality or PIN survives.
+
+## Reading order
+
+OCR words are re-sorted top-to-bottom then left-to-right before analysis
+(`--no-reading-order` disables it). Presidio scores an entity higher when
+a context word sits near it, which only works if the OCR emits each label
+beside its value. Tesseract PSM 3 does not — on a form it emits every
+label and then every value:
+
+```
+before:  Patient Name: Age / Sex: Address: ... Mohammed Irfan Ali 52 / Male ...
+after:   Patient Name: Mohammed Irfan Ali Age / Sex: 52 / Male Address: ...
+```
+
+PSM 4 happens to order correctly, which is most of why it beat PSM 3.
+The wrapper makes that a property of the pipeline rather than a lucky
+segmentation mode, so a backend swap cannot quietly strand every
+context-scored recognizer.
 
 ## Benchmark: OCR backends, measured by leakage
 

@@ -17,3 +17,8 @@ pyzbar
 # but markedly better on photographed/tilted documents.
 paddleocr
 paddlepaddle
+
+# Optional, --medical-ner only: clinical entity detection (diagnoses,
+# medications). Large — pulls in torch.
+transformers
+torch

@@ -192,6 +192,7 @@ def build_engines(
     ocr_backend: str = "tesseract",
     psm: int | None = None,
     medical_ner: bool = False,
+    reading_order: bool = True,
 ):
     """Construct Presidio's image analyzer + redactor engines.
 
@@ -247,7 +248,7 @@ def build_engines(
     analyzer_engine = AnalyzerEngine(registry=registry)
     logger.info("Loading OCR backend: [bold]%s[/bold]", ocr_backend)
     image_analyzer = ImageAnalyzerEngine(
-        analyzer_engine=analyzer_engine, ocr=build_ocr(ocr_backend, psm)
+        analyzer_engine=analyzer_engine, ocr=build_ocr(ocr_backend, psm, reading_order)
     )
     redactor = ImageRedactorEngine(image_analyzer_engine=image_analyzer)
     return image_analyzer, redactor
@@ -484,6 +485,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--no-reading-order",
+        dest="reading_order",
+        action="store_false",
+        help=(
+            "Do not re-sort OCR words top-to-bottom then left-to-right. On by "
+            "default: without it, some segmentation modes emit every label "
+            "before every value, stranding context words from the values they "
+            "label and silently disabling context-scored recognizers"
+        ),
+    )
+    parser.add_argument(
         "--medical-ner",
         action="store_true",
         help=(
@@ -601,6 +613,7 @@ def main() -> None:
         "ocr_backend": args.ocr,
         "psm": args.psm,
         "medical_ner": args.medical_ner,
+        "reading_order": args.reading_order,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -621,6 +634,7 @@ def main() -> None:
         ocr_backend=args.ocr,
         psm=args.psm,
         medical_ner=args.medical_ner,
+        reading_order=args.reading_order,
     )
 
     analyzer_kwargs: dict = {"score_threshold": args.threshold}
