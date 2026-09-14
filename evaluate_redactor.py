@@ -43,6 +43,7 @@ from rich.progress import (
 from rich.table import Table
 
 from ocr_backends import OCR_BACKENDS, TESSERACT_PSM_MODES
+from visual_redaction import REDACTION_STYLES
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 
@@ -267,6 +268,7 @@ def process_image(
     use_pyzbar: bool = False,
     use_wechat: bool = False,
     variant_union: bool = True,
+    style: str = "solid",
 ) -> ImageResult:
     from PIL import Image
 
@@ -376,7 +378,7 @@ def process_image(
     # measured at 7.6s of a 17.4s run. Drawing directly also keeps the
     # output in colour, since the enhanced variants are greyscale.
     try:
-        redacted_image = redact_regions(image, text_boxes + regions)
+        redacted_image = redact_regions(image, text_boxes + regions, style=style)
         save_clean(redacted_image, output_dir / path.name)
     except Exception as exc:
         logger.exception("Redaction/save failed for %s", path.name)
@@ -505,6 +507,16 @@ def main() -> None:
             "default: without it, some segmentation modes emit every label "
             "before every value, stranding context words from the values they "
             "label and silently disabling context-scored recognizers"
+        ),
+    )
+    parser.add_argument(
+        "--style",
+        default="solid",
+        choices=list(REDACTION_STYLES),
+        help=(
+            "How to obscure PII. Only 'solid' destroys the information; blur "
+            "and pixelate are partially reversible and are for review copies, "
+            "not for output leaving a trusted environment"
         ),
     )
     parser.add_argument(
@@ -638,6 +650,7 @@ def main() -> None:
         "medical_ner": args.medical_ner,
         "reading_order": args.reading_order,
         "variant_union": args.variant_union,
+        "style": args.style,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -695,6 +708,7 @@ def main() -> None:
                 args.pyzbar,
                 args.wechat_qr,
                 args.variant_union,
+                args.style,
             )
             results.append(result)
             progress.advance(task)

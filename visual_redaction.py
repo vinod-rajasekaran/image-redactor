@@ -12,7 +12,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 FACE_CASCADE_FILE = "haarcascade_frontalface_default.xml"
 MODEL_DIR = Path(__file__).parent / "models"
@@ -235,23 +235,66 @@ def detect_visual_pii(
 PAD_RATIO = {"face": 0.30, "qr_code": 0.08, "barcode": 0.08}
 
 
+REDACTION_STYLES = ("solid", "blur", "pixelate")
+
+# Deliberately aggressive. Light blur and coarse pixelation are both
+# reversible in practice — see the warning in redact_regions.
+BLUR_RADIUS_RATIO = 0.6  # of the region's short side
+PIXELATE_BLOCKS = 3  # region is reduced to ~3x3 cells before upscaling
+
+
+def _region_box(r: VisualRegion, size: tuple[int, int]) -> tuple:
+    ratio = PAD_RATIO.get(r.kind, 0.05)
+    pad_x = max(2, int(r.width * ratio))
+    pad_y = max(2, int(r.height * ratio))
+    return (
+        max(0, r.left - pad_x),
+        max(0, r.top - pad_y),
+        min(size[0], r.left + r.width + pad_x),
+        min(size[1], r.top + r.height + pad_y),
+    )
+
+
 def redact_regions(
-    image: Image.Image, regions: list[VisualRegion], fill=(0, 0, 0)
+    image: Image.Image,
+    regions: list[VisualRegion],
+    fill=(0, 0, 0),
+    style: str = "solid",
 ) -> Image.Image:
-    """Draw filled boxes over the given regions on a copy of the image."""
+    """Obscure the given regions on a copy of the image.
+
+    **Only `solid` actually destroys the information.** Blur and pixelate
+    are presentation choices, not security ones: blurring is a convolution
+    that can be partially inverted, and pixelating a value drawn from a
+    small known alphabet — a 12-digit Aadhaar in a standard font — is
+    recoverable by rendering every candidate and matching blocks. Neither
+    should be used on output that leaves a trusted environment.
+
+    They are worth having because a reviewer often needs to read the rest
+    of the page and judge whether a redaction landed correctly, and a wall
+    of black boxes makes that harder. The parameters below are set
+    aggressively to make casual recovery difficult, which does not make
+    them safe against a deliberate attempt.
+    """
+    if style not in REDACTION_STYLES:
+        raise ValueError(f"Unknown redaction style {style!r}; expected {REDACTION_STYLES}")
+
     out = image.copy()
     draw = ImageDraw.Draw(out)
     for r in regions:
-        ratio = PAD_RATIO.get(r.kind, 0.05)
-        pad_x = max(2, int(r.width * ratio))
-        pad_y = max(2, int(r.height * ratio))
-        draw.rectangle(
-            [
-                max(0, r.left - pad_x),
-                max(0, r.top - pad_y),
-                min(out.width, r.left + r.width + pad_x),
-                min(out.height, r.top + r.height + pad_y),
-            ],
-            fill=fill,
-        )
+        box = _region_box(r, out.size)
+        left, top, right, bottom = box
+        if right <= left or bottom <= top:
+            continue
+
+        if style == "solid":
+            draw.rectangle(box, fill=fill)
+        elif style == "blur":
+            patch = out.crop(box)
+            radius = max(4, int(min(patch.size) * BLUR_RADIUS_RATIO))
+            out.paste(patch.filter(ImageFilter.GaussianBlur(radius)), (left, top))
+        else:  # pixelate
+            patch = out.crop(box)
+            small = patch.resize((PIXELATE_BLOCKS, PIXELATE_BLOCKS), Image.BILINEAR)
+            out.paste(small.resize(patch.size, Image.NEAREST), (left, top))
     return out
