@@ -918,3 +918,32 @@ six times over on the scorer before this.
 legibility scoring with geometric box matching. A box can be ~85% covered
 and still leak — `12, MG R` plus `shtra - 400058` reconstructs an address
 — so "is it still readable" remains the right question.
+
+---
+
+## 2026-09-14 — Documentation upkeep is part of the change
+
+**Status:** Active
+
+`CLAUDE.md` now opens with a rule: `README.md`, `DECISIONS.md` and
+`CLAUDE.md` are updated in the *same commit* as the change they describe,
+with a table of which file carries what.
+
+**Why:** the three files drifted badly. `CLAUDE.md` still described
+`ocr_backends.py` and `visual_redaction.py` weeks after they moved into
+the package, referenced an `output_images/` folder and a
+`redaction_report.json` that no longer exist, and claimed there was no
+test suite after one had been added. `README.md` carried recall figures
+from three revisions earlier and documented a removed `--output` flag.
+
+Stale guidance is worse than none. A default whose rationale has gone
+missing gets "simplified" away by the next session — and every default
+here that looks wrong is load-bearing, because the obvious choice was
+measured and rejected.
+
+**The rule that matters most:** when a published number turns out to be
+wrong, say so explicitly here and correct it everywhere it appears. The
+headline recall has been corrected six times; each correction is recorded
+with what was wrong and why. That record has proven more useful than any
+individual number, because the same failure — a measurement that shares
+the tool's blind spots — kept recurring in new disguises.
