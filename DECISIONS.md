@@ -1384,3 +1384,86 @@ document arrives as a JPEG anyway.
 prints an estimate and asks before spending, is resumable so a crash never
 pays twice, and `--verify-existing` re-runs the read-back without
 redrawing anything.
+
+---
+
+## 2026-09-15 — Realism probe: the documents were the problem, not the photography
+
+**Status:** Active — `--realism`, `compare_realism.py`
+
+The first 50 came out as fifty near-identical A4 forms: spacious
+label:value rows, clean English sans-serif, pristine paper, dead centre on
+the same desk. Not representative of Indian paperwork in three ways that
+matter — no non-Latin script, no handwriting in printed fields, no dense
+small type.
+
+**The cause was my prompt, not the model.** It dictated the layout
+("label-and-value rows in a clean sans-serif face, ruled lines or a light
+form grid") and hedged every photographic instruction ("*slight*
+perspective", "*mild* uneven lighting", "the whole page is in frame").
+Worse, dictating the layout **suppressed what the model already knows**:
+it renders the correct UIDAI emblem, wordmark and 1947 helpline unprompted.
+The fix was to stop describing a form and describe the artefact — physical
+format, language, printed or handwritten — and let it supply the layout.
+
+**Probe: 6 document types × 2 settings, 11 images, ~$0.85.**
+
+| setting | read-back | redacted |
+|---|---:|---:|
+| `clean` — the original 50 | 100% | **79%** |
+| `authentic` — real layout, format, script, handwriting | 100% | **54%** |
+| `field` — authentic plus sampled capture and paper wear | 100% | **50%** |
+
+**Document structure is the lever; photography is a rounding error.**
+79 → 54 came from layout, language and handwriting. 54 → 50 came from
+everything photographic. My instinct had been the reverse.
+
+Read-back held at 100% throughout, which is what makes those numbers
+usable: `compare_realism.py` exists to watch exactly this, because a
+corpus can be made arbitrarily hard by making it illegible, and an item
+the verifier cannot read cannot be scored. The stopping rule is the
+hardest setting whose read-back has not begun to fall. We are not there
+yet.
+
+**Small n.** 24 and 28 items. The direction is unambiguous at 25 points;
+the precise values are not.
+
+### The finding that matters more: the ground truth is structurally incomplete
+
+Realistic documents carry PII **nobody asked for**. Across the 11 probe
+images: **52 labelled items, 75 unlabelled ones.**
+
+A real bank statement invents a customer ID, an email, a MICR code, and a
+transaction narration reading `NEFT/KKBK24013004567/RENT/RAHUL KUMAR` —
+another person's name entirely. A lab report adds the pathologist's name
+and their medical registration number, twice, once inside a rubber stamp.
+Every ID card adds a signature bearing the holder's name.
+
+This is a flaw in values-first generation that only appears once the
+documents stop being sparse: the annotation knows what was *requested*,
+and a rich page contains far more than that. Every score in this project
+is therefore measured against a subset of the PII actually present —
+**79%, 54%, 50%, and the headline 93.5% are all optimistic by an unknown
+margin**, and most of what is missing is the hard kind: handwriting,
+third-party names, stamps.
+
+Fixing it means the read-back must stop being a checklist and start being
+a survey — "what else is on this page?" — with the result reported for a
+person to accept or reject, as `annotate_inputs.py` already does, because
+what counts as PII is a policy question and not the model's to settle.
+
+**Not regenerating the 50 until that is fixed**, since doing so would only
+bake an incomplete ground truth in at scale.
+
+### Where the realism push stops
+
+The `authentic` Aadhaar prompt was **rejected by OpenAI's moderation at
+input** — it asked for a card "exactly as issued today" carrying "the
+16-digit VID line that a real card carries". That is document fidelity for
+its own sake, and the filter was reading it correctly.
+
+The line, kept deliberately: chase **layout and capture** realism, which
+is what makes OCR hard; do not chase **security-feature** fidelity —
+holograms, microprint, guilloche, exact VID placement — which adds nothing
+to OCR difficulty and whose only effect is helping a fake pass as genuine.
+The spec will be softened rather than reworded to slip past the filter.

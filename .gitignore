@@ -209,3 +209,6 @@ cython_debug/
 datasets/text/
 datasets/.cache/
 input_annotations.json
+
+# Realism probe corpora — experiments, superseded once a setting is chosen
+datasets/probe_*/

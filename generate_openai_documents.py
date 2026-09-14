@@ -43,6 +43,7 @@ import base64
 import json
 import logging
 import os
+import random
 import re
 import sys
 from pathlib import Path
@@ -140,11 +141,168 @@ def resolve_model(client, requested: str | None) -> str:
     return ranked[0]
 
 
-PROMPT_TEMPLATE = """A photograph of a single-page Indian {doc_label}, \
-shot from slightly above on a desk. The whole page is in frame.
+# --- what each document actually looks like ---------------------------------
+#
+# The first version of this file dictated the layout: "label-and-value rows in
+# a clean sans-serif face, ruled lines or a light form grid". That produced 50
+# near-identical A4 forms and, worse, **suppressed what the model already
+# knows** — it renders the correct UIDAI emblem, wordmark and 1947 helpline
+# unprompted, so it plainly holds an accurate picture of the real thing.
+#
+# These specs therefore say what *kind* of artefact it is — physical format,
+# language, whether fields are printed or filled in by hand — and leave the
+# layout to the model. The three properties that define real Indian paperwork
+# and were absent from all 50 of the first batch are named explicitly:
+# non-Latin script, handwriting in printed fields, and dense small type.
 
-Render this document with exactly these printed fields, spelled exactly \
-as given:
+DOC_SPECS = {
+    "aadhaar": dict(
+        label="Aadhaar card issued by UIDAI",
+        form="a wallet-sized card, landscape, printed both sides — show the front",
+        script="bilingual: Hindi in Devanagari above the English on every label",
+        fill="machine-printed",
+        extra="the QR code and the 16-digit VID line that a real card carries",
+    ),
+    "pan": dict(
+        label="PAN card issued by the Income Tax Department",
+        form="a small laminated card, landscape, wallet-sized",
+        script="bilingual: Hindi in Devanagari alongside the English",
+        fill="machine-printed",
+        extra="photo at the lower left and a signature strip beneath it",
+    ),
+    "driving_license": dict(
+        label="Indian driving licence smart card",
+        form="a wallet-sized plastic card, landscape",
+        script="bilingual: the state language in its own script beside the English",
+        fill="machine-printed",
+        extra="vehicle-class table and validity dates in small print",
+    ),
+    "bank_statement": dict(
+        label="bank account statement",
+        form="A4 portrait, printed on the bank's stationery",
+        script="English",
+        fill="machine-printed",
+        extra="**a dense transaction ledger below the account header — date, "
+              "narration, cheque no., debit, credit, running balance, twelve "
+              "or more rows in small 7-8pt type**, page number at the foot",
+    ),
+    "medical_report": dict(
+        label="pathology laboratory report",
+        form="A4 portrait on a hospital letterhead",
+        script="English",
+        fill="machine-printed",
+        extra="**a results table with parameter, result, unit and biological "
+              "reference range in small type**, plus the pathologist's round "
+              "rubber stamp overlapping the text near the signature",
+    ),
+    "land_registration": dict(
+        label="sub-registrar's registered sale deed extract",
+        form="A4 portrait on stamp paper",
+        script="bilingual: dense legal prose, the regional language script "
+               "above or beside the English",
+        fill="machine-printed with handwritten endorsements in the margin",
+        extra="**dense justified legal paragraphs, not a field list**, the "
+              "e-stamp barcode block at the top, and the registrar's inked "
+              "round seal stamped across the text",
+    ),
+    "police_report": dict(
+        label="police First Information Report (FIR)",
+        form="A4 portrait, a numbered pre-printed form",
+        script="the pre-printed form text in Hindi Devanagari, the entries in English",
+        fill="**filled in by hand in blue ballpoint — the values are "
+             "handwritten into the ruled boxes, not typed**",
+        extra="numbered sections, a station rubber stamp, a handwritten "
+              "signature at the foot",
+    ),
+    "application_form": dict(
+        label="government scheme application form",
+        form="A4 portrait, a pre-printed form",
+        script="bilingual pre-printed labels, Hindi above English",
+        fill="**filled in by hand in ballpoint, one character per box where "
+             "the form provides boxed character cells**",
+        extra="tick boxes, a photo box with the corner of a photo stapled in, "
+              "and a thumb impression square",
+    ),
+}
+
+# Sampled per image. The first batch used one fixed recipe — "shot from
+# slightly above on a desk, the whole page in frame" — so all 50 came out as
+# the same product-mockup shot. Variety of capture is most of what was missing.
+CAPTURE_CONDITIONS = [
+    "Photographed handheld on a phone under office fluorescent light: 26mm "
+    "equivalent, f/1.8, ISO 640, mild handheld motion blur, cool-green cast "
+    "from the tubes, the photographer's shadow falling across one edge.",
+
+    "Photographed at an angle on a cluttered desk beside a stapler and a tea "
+    "cup, late afternoon window light from the left, strong perspective, the "
+    "lower right corner cropped out of frame, shallow depth of field so the "
+    "far edge is soft.",
+
+    "A third-generation photocopy: harsh black-and-white, blown-out contrast, "
+    "speckle and toner dust across the page, a black band down one margin "
+    "where the lid did not close, the whole sheet slightly skewed.",
+
+    "A flatbed scan: straight-on and evenly lit but with dust specks, a faint "
+    "scanner banding, and the shadow of a folded corner along the gutter.",
+
+    "Held in one hand and photographed, the thumb visible at the edge, the "
+    "page curving away from the camera so the far half is smaller and the "
+    "text there curves with the paper.",
+
+    "Photographed at night under a single tungsten bulb: warm orange cast, "
+    "a hard specular hotspot on the laminate, deep shadow in the opposite "
+    "corner, visible sensor noise in the dark regions.",
+]
+
+# Wear applied to the paper itself, independent of how it was captured.
+DOCUMENT_WEAR = [
+    "The sheet has been folded in three and flattened out, so two horizontal "
+    "crease lines run across it with slight shadow along each.",
+    "Dog-eared corner, two staple holes at the top left, and a faint brown "
+    "coffee ring overlapping the lower text.",
+    "Grubby from handling: soft grey smudging along the edges, a biro "
+    "annotation in the margin, one line highlighted in yellow.",
+    "Laser-printed unevenly: a faint toner streak down the page and slightly "
+    "grey blacks, as from a cartridge near the end of its life.",
+    "",  # some documents are simply clean
+]
+
+PORTRAIT_NOTE = (
+    "In the portrait area, a plain grey silhouette placeholder where a "
+    "photo would go — no real or generated human face. "
+)
+SIGNATURE_NOTE = "A handwritten ink signature above the signature line. "
+
+# Realism levels. `clean` reproduces the original batch so the corpus stays
+# comparable; the others are what this experiment is testing.
+AUTHENTIC_TEMPLATE = """A photograph of a real Indian {label}, exactly as \
+issued today — its genuine layout, proportions, typography and language. Do \
+not simplify it into a list of labelled rows; reproduce the real document.
+
+Physical form: {form}
+Language: {script}
+How the fields are completed: {fill}
+It also carries: {extra}
+
+These values must appear on it, spelled exactly as given:
+
+{fields}
+
+{portrait}{signature}{wear}
+
+{capture}
+
+Every value above must stay readable to a human looking at the photograph. \
+No watermark and no "specimen" or "sample" stamp across the text.
+
+The document is fictitious: the person, the numbers and the address are all \
+invented."""
+
+CLEAN_TEMPLATE = """A photograph of a single-page Indian {label}, shot from \
+slightly above on a desk. The whole page is in frame.
+
+Render this document with exactly these printed fields, spelled exactly as \
+given:
 
 {fields}
 
@@ -160,25 +318,8 @@ reader. No watermark, no "sample" or "specimen" stamp across the text.
 
 The document is fictitious and the details are invented."""
 
-PORTRAIT_NOTE = (
-    "In the portrait area, a plain grey silhouette placeholder where a "
-    "photo would go — no real or generated human face. "
-)
-SIGNATURE_NOTE = "A handwritten ink signature above a 'Signature' line. "
 
-DOC_LABELS = {
-    "aadhaar": "Aadhaar-style national identity card",
-    "pan": "PAN (income tax) card",
-    "driving_license": "driving licence card",
-    "bank_statement": "bank account statement",
-    "medical_report": "hospital outpatient medical report",
-    "land_registration": "sub-registrar land registration extract",
-    "police_report": "police First Information Report",
-    "application_form": "government scheme application form",
-}
-
-
-def build_prompt(doc: synth.Document, faces: str) -> str:
+def build_prompt(doc: synth.Document, faces: str, realism: str = "clean") -> str:
     fields = "\n".join(f"  {f.label}: {f.value}" for f in doc.fields)
     portrait = ""
     if doc.has_portrait:
@@ -186,11 +327,30 @@ def build_prompt(doc: synth.Document, faces: str) -> str:
             PORTRAIT_NOTE if faces == "placeholder"
             else "In the portrait area, a passport-style photo of a person. "
         )
-    return PROMPT_TEMPLATE.format(
-        doc_label=DOC_LABELS[doc.doc_type],
-        fields=fields,
-        portrait=portrait,
-        signature=SIGNATURE_NOTE,
+    spec = DOC_SPECS[doc.doc_type]
+
+    if realism == "clean":
+        return CLEAN_TEMPLATE.format(
+            label=spec["label"], fields=fields,
+            portrait=portrait, signature=SIGNATURE_NOTE,
+        )
+
+    # `authentic` keeps the tidy studio capture and changes only the document;
+    # `field` also varies how it was photographed and how worn it is. Two
+    # levels so the two effects can be told apart.
+    if realism == "field":
+        capture = random.choice(CAPTURE_CONDITIONS)
+        wear = random.choice(DOCUMENT_WEAR)
+    else:
+        capture = ("Photographed flat on a desk in even daylight, sharp and "
+                   "fully in frame.")
+        wear = ""
+
+    return AUTHENTIC_TEMPLATE.format(
+        label=spec["label"], form=spec["form"], script=spec["script"],
+        fill=spec["fill"], extra=spec["extra"], fields=fields,
+        portrait=portrait, signature=SIGNATURE_NOTE,
+        wear=wear, capture=capture,
     )
 
 
@@ -442,6 +602,12 @@ def main() -> None:
                              "photoreal PNG is ~2.4MB, the corpus has to fit "
                              "in the repo, and real photographed documents "
                              "arrive as JPEG anyway (default: %(default)s)")
+    parser.add_argument("--realism", default="clean",
+                        choices=["clean", "authentic", "field"],
+                        help="clean: the original tidy A4 form. authentic: the "
+                             "document's real layout, format and language. "
+                             "field: authentic plus a sampled capture "
+                             "condition and paper wear (default: %(default)s)")
     parser.add_argument("--faces", default="placeholder",
                         choices=["placeholder", "generated"],
                         help="portrait area: grey silhouette, or a generated face")
@@ -476,7 +642,9 @@ def main() -> None:
     docs = synth.round_robin(args.count, args.types)
 
     if args.dry_run:
-        console.print(build_prompt(docs[0], args.faces))
+        for doc in docs[: min(len(docs), 3)]:
+            console.print(build_prompt(doc, args.faces, args.realism))
+            console.rule(style="dim")
         console.rule()
         console.print(
             f"[yellow]Dry run.[/yellow] {args.count} images at {args.quality} "
@@ -544,7 +712,7 @@ def main() -> None:
 
                 progress.update(task, description=f"Generating {doc.doc_type}")
                 raw = generate_image(
-                    client, model, build_prompt(doc, args.faces),
+                    client, model, build_prompt(doc, args.faces, args.realism),
                     args.size, args.quality,
                 )
                 path = save_image(raw, path, args.format)
@@ -639,6 +807,7 @@ def corpus_meta(model: str, args) -> dict:
         ),
         "verified_by": "skipped (--no-verify)" if args.no_verify else args.verify_model,
         "faces": args.faces,
+        "realism": args.realism,
     }
 
 
