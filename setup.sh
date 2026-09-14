@@ -49,8 +49,19 @@ mkdir -p input_images runs
 
 # Optional WeChat QR models (--wechat-qr). Small, and only a supplement to
 # the stock detector — see README "Why the defaults are what they are".
-echo "Downloading WeChat QR models (optional, ~1MB)..."
 mkdir -p models
+
+# YuNet face detector — used by default. Without it the code falls back to
+# the Haar cascade, which is measurably less precise.
+echo "Downloading YuNet face model (~230KB)..."
+YUNET=models/face_detection_yunet_2023mar.onnx
+[ -f "$YUNET" ] || curl -sfL -o "$YUNET" \
+  https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx \
+  || echo "  (skipped — falling back to the Haar cascade)"
+
+# Optional WeChat QR models (--wechat-qr), a supplement to the stock
+# detector — see README "Why the defaults are what they are".
+echo "Downloading WeChat QR models (optional, ~1MB)..."
 WECHAT_BASE=https://raw.githubusercontent.com/WeChatCV/opencv_3rdparty/master
 for f in detect.prototxt detect.caffemodel sr.prototxt sr.caffemodel; do
   [ -f "models/$f" ] || curl -sfL -o "models/$f" "$WECHAT_BASE/$f" \

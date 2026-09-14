@@ -105,6 +105,27 @@ skipped — it does not stop the batch. Exit code is `2` if any image
 failed, `0` otherwise, `1` on a fatal startup error (missing input
 folder, missing Tesseract, missing spaCy model).
 
+## Measuring leakage, not detections
+
+Entity counts cannot tell you what fraction of PII was caught — they move
+on both misses and false positives. `ground_truth.json` records the PII
+that actually exists in each test image (the synthetic half derived from
+the generator, so it stays exact; the real half labelled by reading the
+documents), and `score_run.py` measures what survived:
+
+```bash
+python build_ground_truth.py        # writes ground_truth.json
+python evaluate_redactor.py --run-name mytest
+python score_run.py runs/mytest     # writes runs/mytest/score.json
+```
+
+Scoring reads the *output* image back with OCR and asks, per PII item:
+was it legible before, and is it still legible now? That is stricter than
+checking detections, because it also catches boxes drawn in the wrong
+place. Items OCR could not read even in the input are reported separately
+— counting them as successes would flatter the tool, counting them as
+misses would blame Presidio for an OCR problem.
+
 ## Why the defaults are what they are
 
 Every default below was chosen against measured evidence on the sample
@@ -124,7 +145,8 @@ giving up.
 | Aadhaar OCR-tolerant fallback **on** | Stock Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, not down-scored, so one OCR digit error leaves a real Aadhaar fully visible. A real sample card's number is checksum-invalid: stock Presidio redacted nothing, the fallback caught it |
 | That fallback has **no look-around guards** | Guards would stop it matching inside credit-card numbers | OCR flattens the page into one string with no field boundaries, so an adjacent phone number is indistinguishable from a continuation. Guards were tried and dropped real Aadhaars. Cost is label precision in the report, not redaction quality |
 | spaCy `en_core_web_lg` | A newer/Indic NER model sounds better for Indian documents | Aadhaar/PAN/voter are **regex + checksum**, not NER — no model change affects them. For names, this model scored 19/20 on Indian names and matches kaapi-guardrails' production validator |
-| Faces padded 30% | Haar returns a tight box | Haar boxes hug eyes and nose and clip chin, hair and ears. The first run left a recognisable sliver of face visible |
+| YuNet for faces, Haar as fallback | Haar ships with OpenCV and needs no model file | Haar reported **3 faces where 2 exist**, inventing one on the Aadhaar card; YuNet found exactly the 2. Haar still runs if the model file is missing, so a skipped download degrades quality rather than breaking |
+| Faces padded 30% | The detector returns a tight box | Tight boxes clip chin, hair and ears. The first run left a recognisable sliver of face visible |
 | Clean images copied through | Writing only redacted files is less work | The output folder stays a complete mirror of the input, so a downstream consumer never silently loses a file |
 
 Two caveats on reading the numbers: entity **counts** move on both misses
