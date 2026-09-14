@@ -192,3 +192,11 @@ ground_truth.json
 
 # Third-party benchmark data (download via benchmark_indiapii.py instructions)
 benchmarks/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
