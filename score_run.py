@@ -5,23 +5,34 @@ Rather than trusting detection counts, this reads the *output* image back
 with OCR and asks, for each known PII item: was it legible before, and is
 it still legible now?
 
-    redacted        — legible in the input, gone from the output
-    leaked          — legible in the input and still legible in the output
-    leaked_ocr_miss — OCR never read it, so nothing was drawn over it
+    leaked       — still readable in the output. Confirmed failure.
+    redacted     — readable in the input, gone from the output. Confirmed
+                   success.
+    unverifiable — the scorer's OCR cannot read it in either image, so
+                   there is no evidence either way.
 
-**Both leak buckets are visible PII.** An earlier version of this script
-reported recall over "legible" items only, excluding `leaked_ocr_miss` on
-the reasoning that an OCR failure should not be blamed on Presidio. That
-was wrong, and it flattered the numbers badly: a whole laptop-screen form
-with an unredacted name, email, phone and address scored as zero misses,
-because Tesseract could not read any of it.
+This script has had this wrong in both directions, which is why the third
+bucket exists.
 
-Which component failed is an internal detail. If the PII is still on the
-page, it leaked. Headline recall is therefore over *all* known PII, with
-the split kept only as a diagnostic for where to spend effort.
+It first reported recall over "legible" items only, silently excluding
+everything its OCR could not read. That flattered the result: a
+laptop-screen form with an unredacted name, email, phone and address
+scored as zero misses because Tesseract read none of it.
+
+Counting those as leaks instead over-corrected. When the redaction run
+uses a stronger engine than the scorer, PII that engine correctly
+redacted gets called a leak — a job-application email, verified by eye as
+fully blacked out, was reported as still visible purely because the
+scorer's Tesseract could not read it in the input.
+
+Neither claim was supportable, so results are now reported as a range:
+a confirmed floor, and a ceiling that assumes every unverifiable item was
+redacted. Narrow the gap by scoring with a stronger reader
+(`--scorer-ocr paddle`), since the real question is whether *anyone* can
+read the PII, not whether Tesseract can.
 
 Usage:
-    python score_run.py runs/<run-name>
+    python score_run.py runs/<run-name> [--scorer-ocr paddle]
 """
 from __future__ import annotations
 
@@ -30,7 +41,6 @@ import re
 import sys
 from pathlib import Path
 
-import pytesseract
 from PIL import Image
 from rich.console import Console
 from rich.table import Table
@@ -60,19 +70,46 @@ def is_present(needle: str, haystack_tokens: set[str]) -> bool:
     return (hits / len(needle_tokens)) >= TOKEN_MATCH_RATIO
 
 
+_SCORER_OCR = None
+
+
+def set_scorer_ocr(backend: str = "tesseract") -> None:
+    """Choose the reader used for scoring.
+
+    The question a scorer answers is whether *anyone* can still read the
+    PII, so it should use the strongest reader available — not necessarily
+    the one the redaction run used. A weak scorer inflates the
+    unverifiable bucket and can report a correctly redacted value as
+    unproven.
+    """
+    global _SCORER_OCR
+    from ocr_backends import build_ocr
+
+    _SCORER_OCR = build_ocr(backend, psm=4 if backend == "tesseract" else None)
+
+
 def ocr_tokens(path: Path, upscale: int = 2) -> set[str]:
+    if _SCORER_OCR is None:
+        set_scorer_ocr()
     image = Image.open(path)
     if upscale > 1:
         image = image.resize(
             (image.width * upscale, image.height * upscale), Image.LANCZOS
         )
-    return set(tokens(pytesseract.image_to_string(image)))
+    result = _SCORER_OCR.perform_ocr(image)
+    return set(tokens(" ".join(str(t) for t in result["text"])))
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
+
+    backend = "tesseract"
+    if "--scorer-ocr" in sys.argv:
+        backend = sys.argv[sys.argv.index("--scorer-ocr") + 1]
+    set_scorer_ocr(backend)
+    console.print(f"[dim]scoring with OCR backend: {backend}[/dim]")
 
     run_dir = Path(sys.argv[1])
     summary_path = run_dir / "summary.json"
@@ -86,8 +123,9 @@ def main() -> None:
     images_dir = run_dir / "images"
 
     rows = []
-    totals = {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
+    totals = {"redacted": 0, "leaked": 0, "unverifiable": 0}
     per_type: dict[str, dict[str, int]] = {}
+    per_category: dict[str, dict[str, int]] = {}
 
     for name, entry in sorted(truth.items()):
         src, out = input_dir / name, images_dir / name
@@ -95,21 +133,26 @@ def main() -> None:
             continue
         before, after = ocr_tokens(src), ocr_tokens(out)
 
-        counts = {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
+        counts = {"redacted": 0, "leaked": 0, "unverifiable": 0}
         for item in entry["pii"]:
-            if not is_present(item["text"], before):
-                verdict = "leaked_ocr_miss"
-            elif is_present(item["text"], after):
-                verdict = "leaked"
+            if is_present(item["text"], after):
+                verdict = "leaked"          # readable in the output: certain
+            elif is_present(item["text"], before):
+                verdict = "redacted"        # was readable, now is not
             else:
-                verdict = "redacted"
+                verdict = "unverifiable"    # never readable to this scorer
             counts[verdict] += 1
             totals[verdict] += 1
             key = item["expected_type"] or "(no recognizer)"
             per_type.setdefault(
-                key, {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
+                key, {"redacted": 0, "leaked": 0, "unverifiable": 0}
             )
             per_type[key][verdict] += 1
+            cat = item.get("category", "uncategorised")
+            per_category.setdefault(
+                cat, {"redacted": 0, "leaked": 0, "unverifiable": 0}
+            )
+            per_category[cat][verdict] += 1
         rows.append((name, entry["source"], counts))
 
     table = Table(title=f"Leakage by image — {summary['config']['run_name']}")
@@ -117,11 +160,11 @@ def main() -> None:
     table.add_column("src")
     table.add_column("redacted", justify="right", style="green")
     table.add_column("leaked", justify="right", style="red")
-    table.add_column("leaked (ocr miss)", justify="right", style="yellow")
+    table.add_column("unverifiable", justify="right", style="yellow")
     for name, source, c in rows:
         table.add_row(
             name, source, str(c["redacted"]), str(c["leaked"]),
-            str(c["leaked_ocr_miss"])
+            str(c["unverifiable"])
         )
     console.print(table)
 
@@ -129,24 +172,43 @@ def main() -> None:
     ttable.add_column("expected type", style="cyan")
     ttable.add_column("redacted", justify="right", style="green")
     ttable.add_column("leaked", justify="right", style="red")
-    ttable.add_column("leaked (ocr miss)", justify="right", style="yellow")
+    ttable.add_column("unverifiable", justify="right", style="yellow")
     for key, c in sorted(
-        per_type.items(), key=lambda kv: -(kv[1]["leaked"] + kv[1]["leaked_ocr_miss"])
+        per_type.items(), key=lambda kv: -(kv[1]["leaked"] + kv[1]["unverifiable"])
     ):
         ttable.add_row(
-            key, str(c["redacted"]), str(c["leaked"]), str(c["leaked_ocr_miss"])
+            key, str(c["redacted"]), str(c["leaked"]), str(c["unverifiable"])
         )
     console.print(ttable)
 
+    ctable = Table(title="By PII category")
+    ctable.add_column("category", style="cyan")
+    ctable.add_column("redacted", justify="right", style="green")
+    ctable.add_column("leaked", justify="right", style="red")
+    ctable.add_column("unverifiable", justify="right", style="yellow")
+    ctable.add_column("floor %", justify="right")
+    for cat, c in sorted(per_category.items(), key=lambda kv: -sum(kv[1].values())):
+        n = sum(c.values())
+        ctable.add_row(
+            cat, str(c["redacted"]), str(c["leaked"]), str(c["unverifiable"]),
+            f"{c['redacted'] / n * 100:.0f}" if n else "-",
+        )
+    console.print(ctable)
+
     total = sum(totals.values())
-    visible = totals["leaked"] + totals["leaked_ocr_miss"]
-    recall = (totals["redacted"] / total * 100) if total else 0.0
+    floor = (totals["redacted"] / total * 100) if total else 0.0
+    ceiling = (
+        ((totals["redacted"] + totals["unverifiable"]) / total * 100)
+        if total
+        else 0.0
+    )
     console.print(
-        f"\n[bold]Redaction recall over all known PII: {recall:.1f}%[/bold] "
-        f"({totals['redacted']}/{total})\n"
-        f"[red]{visible} items still visible[/red] — "
-        f"{totals['leaked']} detected-but-missed, "
-        f"{totals['leaked_ocr_miss']} never read by OCR"
+        f"\n[bold]Redaction recall: {floor:.1f}% – {ceiling:.1f}%[/bold] "
+        f"of {total} known PII items\n"
+        f"[green]{totals['redacted']} confirmed redacted[/green]   "
+        f"[red]{totals['leaked']} confirmed still visible[/red]   "
+        f"[yellow]{totals['unverifiable']} unverifiable[/yellow] "
+        f"(scorer OCR could not read them either way)"
     )
 
     score_path = run_dir / "score.json"
@@ -156,9 +218,11 @@ def main() -> None:
                 "run_name": summary["config"]["run_name"],
                 "config": summary["config"],
                 "totals": totals,
-                "recall_overall_pct": round(recall, 1),
-                "items_still_visible": visible,
+                "recall_floor_pct": round(floor, 1),
+                "recall_ceiling_pct": round(ceiling, 1),
+                "confirmed_visible": totals["leaked"],
                 "by_type": per_type,
+                "by_category": per_category,
                 "by_image": {n: c for n, _s, c in rows},
             },
             indent=2,

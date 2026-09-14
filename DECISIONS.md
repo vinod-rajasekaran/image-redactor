@@ -531,3 +531,53 @@ rule that excuses a whole failure mode will hide exactly the failures
 worth fixing. Eleven of the sixteen remaining leaks are PII no OCR engine
 read, which makes OCR quality, not recognizer coverage, the dominant
 remaining problem.
+
+---
+
+## 2026-09-14 — Ground truth relabelled from the images; recall reported as a range
+
+**Status:** Active — supersedes every figure in entries above
+
+Two changes, both prompted by the user opening the output folder and
+seeing unredacted names and emails that the scorer reported as clean.
+
+**1. Ground truth was under-counted by 35%.** The real documents had been
+labelled from a downscaled contact sheet. Re-reading each image at full
+resolution found 130 PII items against the previous 96 — the lab report's
+age/gender line and all five test results, the prescription's age and all
+three medications, all six bank transactions and the closing balance, and
+the boarding pass's flight number, times and seat. The omitted items were
+disproportionately ones the pipeline does *not* redact, so every earlier
+figure was optimistic.
+
+**2. Recall is now a range, not a point.** The scorer had this wrong
+twice: first excluding items its OCR could not read (flattering), then
+counting them all as leaks (over-correcting — a verified-redacted email
+was reported visible because Tesseract could not read the input). An item
+is now `leaked` only when readable in the output, `redacted` only when
+readable before and not after, and `unverifiable` otherwise.
+
+**Current figure:** Tesseract with every improvement scores
+**67.7% – 76.2%** of 130 items — 88 confirmed redacted, 31 confirmed
+visible, 11 unverifiable.
+
+**What the category breakdown exposes:** recall is not uniform, and the
+single number hid a category with *zero* coverage.
+
+| category | floor |
+|---|---:|
+| identifier | 84% |
+| health | 83% |
+| quasi_identifier | 67% |
+| contact | 62% |
+| financial | **0%** |
+
+Every transaction line and balance on a bank statement survives,
+including `UPI - Apollo Pharmacy`, which discloses healthcare usage from
+financial data. No recognizer covers transaction descriptions.
+
+**Lesson:** the harness was measured against labels written by the same
+process that built it, and agreed with itself. Independent labelling —
+here, reading the images rather than trusting the earlier pass — moved
+the headline by roughly 10 points and revealed an entire uncovered
+category.

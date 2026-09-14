@@ -125,9 +125,9 @@ folder, missing Tesseract, missing spaCy model).
 
 Entity counts cannot tell you what fraction of PII was caught — they move
 on both misses and false positives. `ground_truth.json` records the PII
-that actually exists in each test image (the synthetic half derived from
-the generator, so it stays exact; the real half labelled by reading the
-documents), and `score_run.py` measures what survived:
+that actually exists in each test image — the synthetic half derived from
+the generator so it cannot drift, the real half labelled by reading each
+image at full resolution — and `score_run.py` measures what survived:
 
 ```bash
 python build_ground_truth.py        # writes ground_truth.json
@@ -140,13 +140,24 @@ was it legible before, and is it still legible now? That is stricter than
 checking detections, because it also catches boxes drawn in the wrong
 place.
 
-Items OCR never read are counted as **leaks**, not excluded. An earlier
-version reported recall over "legible" items only, which flattered the
-result badly: a laptop-screen form with an unredacted name, email, phone
-and address scored as zero misses purely because Tesseract could not read
-it. Which component failed is an internal detail — if the PII is on the
-page, it leaked. The split is kept as a diagnostic for where to spend
-effort, not as an exclusion.
+Results are a **range**, because this measurement has been wrong in both
+directions. Reporting recall over "legible" items only excluded
+everything the scorer could not read, and flattered the result: a
+laptop-screen form with an unredacted name, email, phone and address
+scored as zero misses. Counting those as leaks instead over-corrected —
+an email verified by eye as fully blacked out was reported as visible,
+purely because the scorer's Tesseract could not read it in the input.
+
+So an item is only called **leaked** when it is readable in the output,
+only **redacted** when it was readable before and is not now, and
+**unverifiable** otherwise. The floor assumes every unverifiable item
+leaked; the ceiling assumes none did. Narrow the gap with
+`--scorer-ocr paddle`: the question is whether *anyone* can read the PII,
+not whether Tesseract can.
+
+`annotate_leaks.py runs/<run>` renders the failures visually into
+`runs/<run>/scored/` — red outlines for confirmed leaks, orange for
+unverifiable, with a banner listing anything that could not be located.
 
 ## Why the defaults are what they are
 
@@ -250,15 +261,29 @@ rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
 
 Measured end to end on the same 20 images, Tesseract throughout:
 
-Recall is over **all 96 known PII items**, and every item not redacted
-counts as visible regardless of why.
+Recall is reported as a **range** over all 130 known PII items: a floor
+of what is confirmed redacted, and a ceiling assuming every unverifiable
+item was also redacted. See "Measuring leakage" for why both numbers are
+needed.
 
-| stage | recall | still visible |
-|---|---:|---:|
-| Tesseract PSM 3, no custom recognizers | 65.6% | 33 |
-| + seven custom Indian recognizers (PSM 4) | 71.9% | 27 |
-| + reading-order + medical NER | 78.1% | 21 |
-| **PaddleOCR + all of the above** | **83.3%** | **16** |
+Against the current vision-labelled ground truth (130 items), Tesseract
+with every improvement scores **67.7% – 76.2%**: 88 confirmed redacted,
+31 confirmed still visible, 11 unverifiable.
+
+Recall varies enormously by category, which a single number hides:
+
+| category | items | confirmed redacted | floor |
+|---|---:|---:|---:|
+| identifier | 50 | 42 | 84% |
+| health | 12 | 10 | 83% |
+| quasi_identifier | 27 | 18 | 67% |
+| contact | 29 | 18 | 62% |
+| **financial** | **12** | **0** | **0%** |
+
+**Financial data is entirely unredacted.** Every transaction line and
+balance on a bank statement survives, including `UPI - Apollo Pharmacy`,
+which discloses healthcare usage. Presidio has no recognizer for
+transaction descriptions or amounts, and none was added.
 
 Of the 16 still visible in the best configuration, **11 are PII that OCR
 never read at all** — chiefly a photographed laptop screen whose name,
