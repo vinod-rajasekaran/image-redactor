@@ -119,6 +119,19 @@ def main() -> None:
 
     summary = json.loads(summary_path.read_text())
     truth = json.loads(Path("ground_truth.json").read_text())
+
+    # Verdicts recorded by looking at the output images. The OCR scorer can
+    # only ever see what its OCR sees, and on exactly the low-contrast
+    # documents where redaction fails it reads almost nothing — so it both
+    # reports visible PII as "unverifiable" and, worse, as "redacted".
+    # Where a vision verdict exists for an item it wins outright.
+    vision_path = run_dir / "vision_verdicts.json"
+    vision = json.loads(vision_path.read_text()) if vision_path.exists() else {}
+    if vision:
+        console.print(
+            f"[cyan]Using vision verdicts for "
+            f"{sum(len(v) for v in vision.values())} item(s)[/cyan]"
+        )
     input_dir = Path(summary["config"]["input_dir"])
     images_dir = run_dir / "images"
 
@@ -135,7 +148,10 @@ def main() -> None:
 
         counts = {"redacted": 0, "leaked": 0, "unverifiable": 0}
         for item in entry["pii"]:
-            if is_present(item["text"], after):
+            override = vision.get(name, {}).get(item["text"])
+            if override in ("leaked", "redacted"):
+                verdict = override
+            elif is_present(item["text"], after):
                 verdict = "leaked"          # readable in the output: certain
             elif is_present(item["text"], before):
                 verdict = "redacted"        # was readable, now is not

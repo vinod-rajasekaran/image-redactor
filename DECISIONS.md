@@ -774,3 +774,52 @@ ourselves cost twenty lines and no licence exposure.
 **Known, pre-existing and unrelated:** several documents black out the
 whole label column. It is present with merging disabled, so it is not
 caused by this change; it has not been diagnosed.
+
+---
+
+## 2026-09-14 — Vision scoring resolves the unverifiable bucket
+
+**Status:** Active
+
+`score_run.py` now reads an optional `vision_verdicts.json` from the run
+folder. Where a verdict exists for an item it overrides the OCR verdict.
+
+**Why:** the OCR scorer can only see what its OCR sees, and on exactly
+the low-contrast photos where redaction fails it reads almost nothing. It
+was therefore wrong in both directions at once — reporting visible PII as
+"unverifiable", and, worse, as "redacted". Reading the output of
+`19_loan_application.png` it recovered only the words "personal" and
+"details" from a page whose address is plainly legible; on
+`15_job_application_form.png` it garbled `98765` into `gos765` and so
+scored a clearly visible phone number as redacted.
+
+**Result with vision verdicts: 96.1% (74/77), 3 confirmed leaks, zero
+unverifiable.** The range collapses to a point because nothing is left
+unknown.
+
+The three leaks are all on the two hardest photographs: a given name and
+a phone number still legible on the job-application form, and the
+residential address on the laptop-screen loan form.
+
+**This corrects a headline claim.** The previous entry reported "zero
+confirmed leaks" at 88.3% – 100.0%. There were three; the scorer could
+not read them.
+
+**Limitations, stated plainly:**
+
+- The pass is manual. There is no API key in this environment, so it was
+  done by viewing each output image in-session, not by an automated
+  vision call. It is an artifact, not a reproducible scorer.
+- Verdicts are tied to the images in that run folder. Re-running into the
+  same folder name would silently apply stale verdicts to new output.
+- Judgement calls are recorded in the file: a fragment too short to
+  identify anyone (a PIN-code tail, a surname ending) counts as redacted,
+  while a legible given name counts as leaked, on the principle that
+  over-reporting leaks is the safer error.
+
+**Fifth correction to this metric.** It has now been wrong by excluding
+unreadable items, by counting them all as leaks, by mislabelling what
+counts as PII, by under-reading the output, and by reporting a leak count
+of zero. Every correction moved the headline. The consistent cause is
+that a scorer built from the same components as the tool shares its blind
+spots.
