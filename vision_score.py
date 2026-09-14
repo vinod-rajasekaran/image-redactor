@@ -28,6 +28,7 @@ import argparse
 import base64
 import json
 import os
+import os
 import sys
 from pathlib import Path
 
@@ -124,7 +125,10 @@ def main() -> None:
 
     run_dir = Path(args.run_dir)
     images_dir = run_dir / "images"
-    truth = json.loads(Path("ground_truth.json").read_text())
+    from redactor import datasets
+
+    corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    truth = corpus.annotations
 
     verdicts: dict[str, dict[str, str]] = {
         "_note": (

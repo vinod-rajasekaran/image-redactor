@@ -40,6 +40,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from redactor import datasets
 from rich.console import Console
 from rich.table import Table
 
@@ -49,9 +50,9 @@ PARQUET_URL = (
     "https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images/"
     "resolve/main/data/test-00000-of-00001.parquet"
 )
-CACHE = Path("benchmarks/cheques_test.parquet")
-IMAGE_DIR = Path("cheque_images")
-REGIONS = Path("cheque_regions.json")
+CACHE = datasets.ROOT / "text" / "cheques_test.parquet"
+IMAGE_DIR = datasets.ROOT / "cheques" / "images"
+REGIONS = datasets.ROOT / "cheques" / "annotations.json"
 
 # field -> (our entity type, tier). Only fields that identify a person.
 PII_FIELDS = {
@@ -126,7 +127,9 @@ def score(run_dir: Path) -> None:
         console.print(f"[red]{REGIONS} missing — run without --score first.[/red]")
         raise SystemExit(1)
 
-    regions = json.loads(REGIONS.read_text())
+    regions = {k: v["pii"] if isinstance(v, dict) else v
+               for k, v in json.loads(REGIONS.read_text()).items()
+               if not k.startswith("_")}
     images = run_dir / "images"
     table = Table(title=f"Cheque region coverage — {run_dir}")
     table.add_column("cheque", style="cyan")

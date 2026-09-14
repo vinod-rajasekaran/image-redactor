@@ -28,6 +28,28 @@ When a published number turns out to be wrong, **say so explicitly in
 headline recall has been corrected six times; each correction is recorded
 with what was wrong and why. That record is more useful than the number.
 
+## Re-check the structure before any significant push
+
+Alongside the documentation rule above: when a push adds a script, a
+corpus, a benchmark or a module, **look at the repo layout before you
+push it** and ask whether the new thing landed somewhere defensible.
+
+The two failures this catches, both of which happened here:
+
+- **Scattered corpora.** Validation images accumulated as `input_images/`,
+  `cheque_images/` and `pack_images/`, with three near-identical
+  annotation schemas and every script hardcoding its own paths. Adding a
+  fourth meant editing all of them. They now live under `datasets/<name>/`
+  with one schema and one loader (`redactor/datasets.py`).
+- **A god module.** `evaluate_redactor.py` reached 782 lines doing seven
+  unrelated jobs before it was split.
+
+Both were cheap to fix when caught and would have compounded. A structural
+change is safe to make *only* with a verification that behaviour did not
+move — for the package split it was byte-identical output images; for the
+corpus move it was identical scores on all three corpora. If you cannot
+show that, you have done a rewrite, not a refactor.
+
 ## What this is
 
 A local evaluation harness for Presidio's image redaction, aimed at Indian
@@ -57,9 +79,12 @@ documents), five confirmed leaks, all partial-coverage failures.
 - `hygiene.py`, `runs.py`, `vision.py` — metadata stripping, run folders,
   shared Claude client.
 
-`runs/`, `input_images/`, `ground_truth.json` and `input_annotations.json`
-are gitignored and may hold real PII. Never commit anything from them,
-not even "sample output".
+`datasets/` holds every validation corpus — images and annotations
+together, one schema, loaded through `redactor.datasets.load(name)`. All
+of it is gitignored except `datasets/README.md`: `documents/` contains
+real photographs, and an annotation file says exactly where the PII sits.
+`runs/` and `input_annotations.json` are gitignored for the same reason.
+Never commit anything from them, not even "sample output".
 
 ## Environment
 

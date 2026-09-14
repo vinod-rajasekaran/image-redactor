@@ -26,11 +26,12 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
+from redactor import datasets
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
-DATASET = Path("benchmarks/indiapii-v1.0.jsonl")
+DATASET = datasets.ROOT / "text" / "indiapii-v1.0.jsonl"
 
 # Their label -> the Presidio entity types we would accept as a hit.
 LABEL_TO_OURS = {

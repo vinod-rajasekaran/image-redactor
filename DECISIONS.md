@@ -1142,3 +1142,41 @@ neither is canonical and the label gates it regardless.
   77% and 100% above prove the recognizers work *on that generator* and
   nothing more. Real land documents would settle it, and bring back the
   provenance problem that ruled out the Roboflow Aadhaar set.
+
+---
+
+## 2026-09-14 — One `datasets/` tree, one annotation schema
+
+**Status:** Active
+
+Validation corpora had accumulated as three top-level folders —
+`input_images/`, `cheque_images/`, `pack_images/` — with three
+near-identical annotation files and every script hardcoding its own paths.
+Adding a fourth corpus meant editing all of them, and the schemas had
+already drifted: `ground_truth.json` carried `text` but no `box`, the two
+region files the reverse.
+
+They now live under `datasets/<name>/{images,annotations.json}`, loaded
+through `redactor.datasets.load(name)`. One schema carries both `text` and
+`box`, each optional, at least one present — because they answer different
+questions. `text` supports legibility scoring, the headline metric, since
+a box 85% covered can still leak. `box` supports coverage, which is weaker
+but deterministic and free of a model call, and is only trustworthy where
+the boxes were computed at render time or authored by a person.
+
+`datasets/README.md` records what each corpus is, its licence and its
+provenance, and is the only tracked file under the tree. Everything else
+is gitignored: the documents corpus holds real photographs, and an
+annotation file states exactly where the PII sits.
+
+**Verified as a move, not a rewrite:** documents 72 redacted / 5 visible,
+cheques acno 17% / name 28% / sign 51%, pack 90% with 47/87 fully covered
+— every figure identical to before.
+
+**Also added to `CLAUDE.md`:** re-check the repo layout before any
+significant push. Two structural problems have already been caught and
+fixed here — the scattered corpora above, and `evaluate_redactor.py`
+reaching 782 lines doing seven jobs. Both were cheap when caught and would
+have compounded. The rule carries its own guard: a structural change is
+only safe with a demonstration that behaviour did not move, and without
+one it is a rewrite.

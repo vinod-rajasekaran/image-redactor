@@ -28,11 +28,12 @@ import collections
 import logging
 from pathlib import Path
 
+from redactor import datasets
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
-DATASET = Path("benchmarks/maskara_real_world_eval.parquet")
+DATASET = datasets.ROOT / "text" / "maskara_real_world_eval.parquet"
 
 # Their label -> the Presidio entity types we accept as a hit. An empty
 # set means we have no recognizer for it and never claimed to.

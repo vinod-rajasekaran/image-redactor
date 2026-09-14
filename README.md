@@ -57,9 +57,9 @@ cp .env.example .env    # then fill in ANTHROPIC_API_KEY
 source venv/bin/activate
 
 python generate_test_images.py          # 10 synthetic Indian documents (optional)
-python evaluate_redactor.py             # redact input_images/ -> runs/<name>/
+python build_ground_truth.py            # -> datasets/documents/annotations.json
+python evaluate_redactor.py --input datasets/documents/images
 
-python build_ground_truth.py            # what PII each image contains
 python vision_score.py runs/<name>      # ask Claude what survived
 python score_run.py runs/<name>         # the score
 python annotate_leaks.py runs/<name>    # draw the failures onto the images
@@ -68,8 +68,11 @@ python annotate_leaks.py runs/<name>    # draw the failures onto the images
 Drop your own images into `input_images/` and run `evaluate_redactor.py`;
 the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
-`input_images/`, `runs/`, `ground_truth.json` and `input_annotations.json`
-are gitignored — they describe or contain real PII.
+Validation corpora live under `datasets/` — images and annotations
+together, one schema, one loader. See
+[datasets/README.md](datasets/README.md). All of it is gitignored: the
+documents corpus holds real photographs and the annotations say exactly
+where the PII sits.
 
 ### Options
 
@@ -319,6 +322,7 @@ findings from this harness apply to it:
 ## Files
 
 ```
+datasets/            validation corpora — documents, cheques, pack, text
 redactor/            the package
   recognizers.py     India + custom recognizers, build_registry()
   pipeline.py        per-image pipeline and engine assembly
@@ -331,6 +335,7 @@ redactor/            the package
   hygiene.py         EXIF, GPS and thumbnail stripping
   runs.py            run folders, config.json, summary.json
   vision.py          shared Claude client and .env loading
+  datasets.py        corpus loader and the one annotation schema
 
 evaluate_redactor.py        the CLI
 generate_test_images.py     synthetic Indian documents

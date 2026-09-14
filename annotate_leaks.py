@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -184,8 +185,11 @@ def main() -> None:
 
     run_dir = Path(sys.argv[1])
     summary = json.loads((run_dir / "summary.json").read_text())
-    truth = json.loads(Path("ground_truth.json").read_text())
-    input_dir = Path(summary["config"]["input_dir"])
+    from redactor import datasets
+
+    corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    truth = corpus.annotations
+    input_dir = corpus.images
     images_dir = run_dir / "images"
     scored_dir = run_dir / "scored"
     scored_dir.mkdir(parents=True, exist_ok=True)

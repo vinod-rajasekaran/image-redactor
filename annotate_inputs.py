@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -148,7 +149,10 @@ def main() -> None:
     args = parser.parse_args()
 
     input_dir = Path(args.input)
-    truth = json.loads(Path("ground_truth.json").read_text())
+    from redactor import datasets
+
+    corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    truth = corpus.annotations
     names = sorted(p.name for p in input_dir.glob("*.png"))
     if args.limit:
         names = names[: args.limit]

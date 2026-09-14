@@ -137,7 +137,6 @@ env.bak/
 venv.bak/
 
 # Image redactor evaluation data (may contain real PII from user-supplied images)
-input_images/
 output_images/
 runs/
 
@@ -188,10 +187,8 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 # Ground truth describes PII in local test images; regenerate with build_ground_truth.py
-ground_truth.json
 
 # Third-party benchmark data (download via benchmark_indiapii.py instructions)
-benchmarks/
 
 # Secrets — never commit
 .env
@@ -202,8 +199,12 @@ benchmarks/
 .DS_Store
 
 # Vision annotations describe PII in local images
-input_annotations.json
 
 # Cheque benchmark working data
-cheque_images/
-cheque_regions.json
+
+# Validation corpora: images and annotations. Never committed — documents/
+# holds real photographs, and the annotations say exactly where the PII is.
+# datasets/README.md is tracked; everything under it is not.
+datasets/*
+!datasets/README.md
+input_annotations.json

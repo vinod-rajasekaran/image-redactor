@@ -21,7 +21,9 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-OUTPUT_DIR = Path("input_images")
+from redactor import datasets
+
+OUTPUT_DIR = datasets.ROOT / "documents" / "images"
 IMAGE_SIZE = (900, 1100)
 MARGIN = 60
 LINE_HEIGHT = 42

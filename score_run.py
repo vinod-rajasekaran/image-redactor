@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -118,7 +119,10 @@ def main() -> None:
         sys.exit(1)
 
     summary = json.loads(summary_path.read_text())
-    truth = json.loads(Path("ground_truth.json").read_text())
+    from redactor import datasets
+
+    corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    truth = corpus.annotations
 
     # Verdicts recorded by looking at the output images. The OCR scorer can
     # only ever see what its OCR sees, and on exactly the low-contrast
@@ -132,7 +136,7 @@ def main() -> None:
             f"[cyan]Using vision verdicts for "
             f"{sum(len(v) for v in vision.values())} item(s)[/cyan]"
         )
-    input_dir = Path(summary["config"]["input_dir"])
+    input_dir = corpus.images
     images_dir = run_dir / "images"
 
     rows = []
