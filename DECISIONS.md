@@ -494,3 +494,40 @@ earlier predictions in this project did not survive measurement (Paddle
 appearing better on entity counts while leaking more; RapidOCR assumed
 to share Paddle's models). Configurations are not adopted here on
 reasoning alone.
+
+---
+
+## 2026-09-14 — Recall redefined to count every unredacted item
+
+**Status:** Active — supersedes the "recall on legible PII" figures in
+every entry above
+
+`score_run.py` now reports recall over **all** known PII. Items OCR never
+read are counted as leaks (`leaked_ocr_miss`), not excluded.
+
+**Why:** the previous definition excluded items OCR could not read in the
+input, reasoning that an OCR failure should not be scored against
+Presidio. That was wrong. The user opened the output folder and saw
+unredacted names and email addresses in images the scorer had recorded as
+having zero misses.
+
+**Evidence:** `19_loan_application.png` — a photographed laptop screen —
+shows name, date of birth, mobile number, email and address completely
+unredacted. All five were bucketed as "not legible" and excluded, so the
+image contributed nothing to the leak count.
+
+**Corrected figures** (previous legible-only number in brackets):
+
+| configuration | recall | still visible |
+|---|---:|---:|
+| Tesseract PSM 3 baseline | 65.6% (74.1%) | 33 |
+| + custom recognizers, PSM 4 | 71.9% (81.2%) | 27 |
+| + reading-order + medical NER | 78.1% (88.2%) | 21 |
+| Paddle + all of the above | 83.3% (94.1%) | 16 |
+
+**Lesson:** the metric flattered the tool by roughly 9 points, and did so
+most where the tool was weakest — documents OCR handles badly. A scoring
+rule that excuses a whole failure mode will hide exactly the failures
+worth fixing. Eleven of the sixteen remaining leaks are PII no OCR engine
+read, which makes OCR quality, not recognizer coverage, the dominant
+remaining problem.

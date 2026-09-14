@@ -5,14 +5,20 @@ Rather than trusting detection counts, this reads the *output* image back
 with OCR and asks, for each known PII item: was it legible before, and is
 it still legible now?
 
-    leaked        — legible in the input and still legible in the output
-    redacted      — legible in the input, gone from the output
-    not_legible   — OCR could not read it even in the input, so text
-                    redaction never had a chance (an OCR problem, not a
-                    Presidio one)
+    redacted        — legible in the input, gone from the output
+    leaked          — legible in the input and still legible in the output
+    leaked_ocr_miss — OCR never read it, so nothing was drawn over it
 
-That last bucket matters: counting it as a success would flatter the tool,
-and counting it as a miss would blame the wrong component.
+**Both leak buckets are visible PII.** An earlier version of this script
+reported recall over "legible" items only, excluding `leaked_ocr_miss` on
+the reasoning that an OCR failure should not be blamed on Presidio. That
+was wrong, and it flattered the numbers badly: a whole laptop-screen form
+with an unredacted name, email, phone and address scored as zero misses,
+because Tesseract could not read any of it.
+
+Which component failed is an internal detail. If the PII is still on the
+page, it leaked. Headline recall is therefore over *all* known PII, with
+the split kept only as a diagnostic for where to spend effort.
 
 Usage:
     python score_run.py runs/<run-name>
@@ -80,7 +86,7 @@ def main() -> None:
     images_dir = run_dir / "images"
 
     rows = []
-    totals = {"leaked": 0, "redacted": 0, "not_legible": 0}
+    totals = {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
     per_type: dict[str, dict[str, int]] = {}
 
     for name, entry in sorted(truth.items()):
@@ -89,10 +95,10 @@ def main() -> None:
             continue
         before, after = ocr_tokens(src), ocr_tokens(out)
 
-        counts = {"leaked": 0, "redacted": 0, "not_legible": 0}
+        counts = {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
         for item in entry["pii"]:
             if not is_present(item["text"], before):
-                verdict = "not_legible"
+                verdict = "leaked_ocr_miss"
             elif is_present(item["text"], after):
                 verdict = "leaked"
             else:
@@ -100,7 +106,9 @@ def main() -> None:
             counts[verdict] += 1
             totals[verdict] += 1
             key = item["expected_type"] or "(no recognizer)"
-            per_type.setdefault(key, {"leaked": 0, "redacted": 0, "not_legible": 0})
+            per_type.setdefault(
+                key, {"redacted": 0, "leaked": 0, "leaked_ocr_miss": 0}
+            )
             per_type[key][verdict] += 1
         rows.append((name, entry["source"], counts))
 
@@ -109,10 +117,11 @@ def main() -> None:
     table.add_column("src")
     table.add_column("redacted", justify="right", style="green")
     table.add_column("leaked", justify="right", style="red")
-    table.add_column("not legible", justify="right", style="yellow")
+    table.add_column("leaked (ocr miss)", justify="right", style="yellow")
     for name, source, c in rows:
         table.add_row(
-            name, source, str(c["redacted"]), str(c["leaked"]), str(c["not_legible"])
+            name, source, str(c["redacted"]), str(c["leaked"]),
+            str(c["leaked_ocr_miss"])
         )
     console.print(table)
 
@@ -120,18 +129,24 @@ def main() -> None:
     ttable.add_column("expected type", style="cyan")
     ttable.add_column("redacted", justify="right", style="green")
     ttable.add_column("leaked", justify="right", style="red")
-    ttable.add_column("not legible", justify="right", style="yellow")
-    for key, c in sorted(per_type.items(), key=lambda kv: -kv[1]["leaked"]):
-        ttable.add_row(key, str(c["redacted"]), str(c["leaked"]), str(c["not_legible"]))
+    ttable.add_column("leaked (ocr miss)", justify="right", style="yellow")
+    for key, c in sorted(
+        per_type.items(), key=lambda kv: -(kv[1]["leaked"] + kv[1]["leaked_ocr_miss"])
+    ):
+        ttable.add_row(
+            key, str(c["redacted"]), str(c["leaked"]), str(c["leaked_ocr_miss"])
+        )
     console.print(ttable)
 
-    legible = totals["redacted"] + totals["leaked"]
-    recall = (totals["redacted"] / legible * 100) if legible else 0.0
+    total = sum(totals.values())
+    visible = totals["leaked"] + totals["leaked_ocr_miss"]
+    recall = (totals["redacted"] / total * 100) if total else 0.0
     console.print(
-        f"\n[bold]Redaction recall on legible PII: {recall:.1f}%[/bold] "
-        f"({totals['redacted']}/{legible})   "
-        f"[red]leaked {totals['leaked']}[/red]   "
-        f"[yellow]not legible to OCR {totals['not_legible']}[/yellow]"
+        f"\n[bold]Redaction recall over all known PII: {recall:.1f}%[/bold] "
+        f"({totals['redacted']}/{total})\n"
+        f"[red]{visible} items still visible[/red] — "
+        f"{totals['leaked']} detected-but-missed, "
+        f"{totals['leaked_ocr_miss']} never read by OCR"
     )
 
     score_path = run_dir / "score.json"
@@ -141,7 +156,8 @@ def main() -> None:
                 "run_name": summary["config"]["run_name"],
                 "config": summary["config"],
                 "totals": totals,
-                "recall_on_legible_pct": round(recall, 1),
+                "recall_overall_pct": round(recall, 1),
+                "items_still_visible": visible,
                 "by_type": per_type,
                 "by_image": {n: c for n, _s, c in rows},
             },

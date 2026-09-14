@@ -138,9 +138,15 @@ python score_run.py runs/mytest     # writes runs/mytest/score.json
 Scoring reads the *output* image back with OCR and asks, per PII item:
 was it legible before, and is it still legible now? That is stricter than
 checking detections, because it also catches boxes drawn in the wrong
-place. Items OCR could not read even in the input are reported separately
-— counting them as successes would flatter the tool, counting them as
-misses would blame Presidio for an OCR problem.
+place.
+
+Items OCR never read are counted as **leaks**, not excluded. An earlier
+version reported recall over "legible" items only, which flattered the
+result badly: a laptop-screen form with an unredacted name, email, phone
+and address scored as zero misses purely because Tesseract could not read
+it. Which component failed is an internal detail — if the PII is on the
+page, it leaked. The split is kept as a diagnostic for where to spend
+effort, not as an exclusion.
 
 ## Why the defaults are what they are
 
@@ -152,8 +158,8 @@ giving up.
 | Default | Why not the obvious choice | What it buys |
 |---|---|---|
 | `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 silently drops every context-boosted weak match | A real PAN card's number is redacted instead of left visible; `IN_VOTER` too. At 0.5, `IN_PASSPORT` can *never* fire |
-| `--ocr tesseract` | PaddleOCR leaks less PII — 84.7% recall vs 76.5% | ~17x faster, which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not production redaction |
-| `--psm 4` | Tesseract's own default is 3 | +2.4 points of recall (76.5% vs 74.1%) for no extra time. PSM 4, 6 and 11 tie exactly; 4 matches the layout these documents actually have |
+| `--ocr tesseract` | PaddleOCR leaks less PII — 75.0% recall vs 67.7% | ~17x faster, which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not production redaction |
+| `--psm 4` | Tesseract's own default is 3 | +2.1 points of recall (67.7% vs 65.6%) for no extra time. PSM 4, 6 and 11 tie exactly; 4 matches the layout these documents actually have |
 | `--upscale auto` | Leaving images at native size is simpler | A real job-application photo went from **0 detections to 7**. Also *raises* precision: the PAN card dropped from 9 spurious `PERSON` hits to a correct 4 |
 | visual PII **on** | Presidio only ever redacts OCR'd text | Faces, QR codes and barcodes get redacted. An intact Aadhaar QR encodes name, DOB and address — redacting the printed number while leaving the QR is not redaction |
 | OpenCV `detect()`, never `detectAndDecode()` | The decode APIs look strictly more capable | Decode-gated APIs return **no box** for a code they cannot read, silently skipping exactly the unreadable codes that most need blacking out. This bug shipped once here and was caught only because a barcode count stayed at 0 |
@@ -177,8 +183,8 @@ over-redact regions that were PII anyway, which is the right trade here.
 `custom_recognizers.py` adds seven entities Presidio has no recognizer
 for, found by ground-truth scoring: `IN_IFSC`, `IN_DRIVING_LICENCE`,
 `IN_BANK_ACCOUNT`, `IN_PATIENT_ID` (UHID/MRN), `IN_PNR`,
-`IN_POLICY_NUMBER` and `IN_MEDICAL_REG`. They lifted recall from 76.5%
-to 81.2%.
+`IN_POLICY_NUMBER` and `IN_MEDICAL_REG`. They lifted recall from 65.6%
+to 71.9%.
 
 Two of those have distinctive shapes and fire on their own — an IFSC's
 mandatory `0` in position five makes it near-unambiguous. The rest are
@@ -244,16 +250,23 @@ rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
 
 Measured end to end on the same 20 images, Tesseract throughout:
 
-| stage | recall | leaked |
-|---|---:|---:|
-| Tesseract PSM 3, no custom recognizers | 74.1% | 22 |
-| Tesseract PSM 4 | 76.5% | 20 |
-| + seven custom Indian recognizers | 81.2% | 16 |
-| + reading-order + medical NER | 88.2% | 10 |
-| **PaddleOCR + all of the above** | **94.1%** | **5** |
+Recall is over **all 96 known PII items**, and every item not redacted
+counts as visible regardless of why.
 
-Every remaining leak is a *detection* problem rather than a coverage gap,
-and with Paddle only five survive — all of them span-boundary failures:
+| stage | recall | still visible |
+|---|---:|---:|
+| Tesseract PSM 3, no custom recognizers | 65.6% | 33 |
+| + seven custom Indian recognizers (PSM 4) | 71.9% | 27 |
+| + reading-order + medical NER | 78.1% | 21 |
+| **PaddleOCR + all of the above** | **83.3%** | **16** |
+
+Of the 16 still visible in the best configuration, **11 are PII that OCR
+never read at all** — chiefly a photographed laptop screen whose name,
+email, phone and address are perfectly readable to a person and invisible
+to Tesseract. Nothing is drawn over text the pipeline cannot see, so
+better OCR, not better recognizers, is what closes that half.
+
+The other 5 are detected-but-missed, all span-boundary failures:
 
 | image | entity | value |
 |---|---|---|
@@ -295,30 +308,30 @@ the PII was legible in the input and is **still legible in the redacted
 output** — the only measure that matters. 11 further items are illegible
 to every engine and are excluded from recall.
 
-| config | redacted | leaked | recall | wall s |
+| config | redacted | still visible | recall | wall s |
 |---|---:|---:|---:|---:|
-| **paddle** | 72 | 13 | **84.7%** | 434 |
-| tesseract `--psm 4` *(default)* | 65 | 20 | 76.5% | 26 |
-| tesseract `--psm 6` | 65 | 20 | 76.5% | 25 |
-| tesseract `--psm 11` | 65 | 20 | 76.5% | 27 |
-| rapidocr | 64 | 21 | 75.3% | 40 |
-| tesseract `--psm 3` | 63 | 22 | 74.1% | 31 |
-| tesseract `--psm 12` | 63 | 22 | 74.1% | 37 |
+| **paddle** | 72 | 24 | **75.0%** | 434 |
+| tesseract `--psm 4` *(default)* | 65 | 31 | 67.7% | 26 |
+| tesseract `--psm 6` | 65 | 31 | 67.7% | 25 |
+| tesseract `--psm 11` | 65 | 31 | 67.7% | 27 |
+| rapidocr | 64 | 32 | 66.7% | 40 |
+| tesseract `--psm 3` | 63 | 33 | 65.6% | 31 |
+| tesseract `--psm 12` | 63 | 33 | 65.6% | 37 |
 
 Three things this settles:
 
 - **Page-segmentation mode is a free win.** PSM 4, 6 and 11 all score
-  76.5% against Tesseract's own default of 3 at 74.1%, for no extra time.
+  67.7% against Tesseract's own default of 3 at 65.6%, for no extra time.
   PSM 4 (single column of variable-size text) is now the default; the
   three-way tie means the choice between them is arbitrary.
 - **RapidOCR is not a middle ground.** It was expected to approach
   Paddle's accuracy on a lighter runtime, on the assumption it ran the
   same models. It does not: it ships **PP-OCRv4 mobile**, while
   PaddleOCR 3.7 runs **PP-OCRv6_medium** — two major versions newer and
-  a larger variant. At 75.3% and 40s it is dominated by `--psm 4`, which
+  a larger variant. At 66.7% and 40s it is dominated by `--psm 4`, which
   is both more accurate and faster. Pointing RapidOCR at exported v5/v6
   ONNX models might change this, but that is unexplored.
-- **There is no cheap path to Paddle's accuracy.** The 8-point gap
+- **There is no cheap path to Paddle's accuracy.** The 7-point gap
   between `--psm 4` and Paddle costs ~17x in wall time. Nothing tested
   sits in between.
 
