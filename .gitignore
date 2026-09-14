@@ -203,3 +203,7 @@ benchmarks/
 
 # Vision annotations describe PII in local images
 input_annotations.json
+
+# Cheque benchmark working data
+cheque_images/
+cheque_regions.json
