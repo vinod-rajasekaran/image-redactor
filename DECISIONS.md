@@ -868,3 +868,53 @@ mislabelling what counts as PII, by under-reading the output, by
 reporting zero leaks, and by trusting a manual pass that skipped half the
 corpus. The through-line every time: a scorer that shares the tool's
 blind spots cannot find the tool's failures.
+
+---
+
+## 2026-09-14 — Vision annotation of inputs: adopted as an auditor, rejected as a coverage metric
+
+**Status:** Active as a ground-truth auditor (`annotate_inputs.py`);
+per-region coverage built, measured, and removed.
+
+**Adopted — auditing the labels.** The label set has been this project's
+largest single source of error, swinging 96 -> 130 -> 77 items across
+three revisions and moving the headline recall about ten points each
+time. `annotate_inputs.py` asks Claude what personal data is on each
+*input* page and diffs it against `ground_truth.json`. On the sample set
+it surfaced two items never labelled: a signature bearing a name on the
+PAN card, and the prescribing doctor's name on the synthetic prescription.
+
+It reports rather than rewrites. What counts as PII is a policy question
+and belongs to a person, and keeping the labels human-owned also keeps
+them independent of the model that grades the output.
+
+The five "unseen" items — diagnoses and medications — are a prompt/policy
+mismatch rather than a miss: the annotation prompt excludes
+non-identifying data, while ground truth tracks them in a separate
+`sensitive` tier.
+
+**Rejected — per-region coverage.** The plan was to measure what fraction
+of each annotated box the redactor actually covered and flag anything
+under 100% as a likely leak. Every outstanding leak is a partial-coverage
+failure, so the signal would have been valuable, and the measurement is
+deterministic and needs no model call at scoring time.
+
+It does not work, because the boxes are not accurate enough. Rendered
+over the source image they are inconsistently off by roughly one text
+row: on the sample Aadhaar card the `person_name` box sat on the date of
+birth and the `date_of_birth` box sat on "Male", while three others were
+correct. Coverage computed from them reported **0% for a field that is
+plainly blacked out**, and the numbers showed no correlation with the
+five known leaks.
+
+Vision models are reliable about *what* is on a page and unreliable about
+precisely *where*. The box coordinates are still written to
+`input_annotations.json` for human inspection, but nothing is computed
+from them. A metric that produces confident wrong numbers is worse than
+no metric — which is the most expensive lesson of this project, learned
+six times over on the scorer before this.
+
+**Also rejected earlier, for the same underlying reason:** replacing
+legibility scoring with geometric box matching. A box can be ~85% covered
+and still leak — `12, MG R` plus `shtra - 400058` reconstructs an address
+— so "is it still readable" remains the right question.

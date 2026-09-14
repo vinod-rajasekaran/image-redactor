@@ -200,3 +200,6 @@ benchmarks/
 
 # macOS
 .DS_Store
+
+# Vision annotations describe PII in local images
+input_annotations.json
