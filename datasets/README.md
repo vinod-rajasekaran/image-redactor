@@ -16,8 +16,8 @@ is where a script reads it from.
 |---|---:|---|---|---|---|
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic |
 | `pack/` | 20 | yes | box | `generate_synthetic_indian_pii_images.py` — pack authored with Claude, generated locally | fully synthetic |
-| `cheques/` | 20 | annotations only | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
-| `text/` | 3 files | no | spans | IndiaPII-Bench; maskara-indian-pii-200k; the cheque parquet | CC-BY-4.0; MIT; Apache-2.0 |
+| `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
+| `text/` | 2 files | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
 
 Images 11–20 *imitate* photographed pages — perspective, glare, low
 contrast — and the notes elsewhere call them photographs for that reason.
@@ -25,21 +25,28 @@ That is rendered appearance, not a camera: they are the hardest images
 here precisely because a generator was asked to make them look shot in
 poor light.
 
-## What is not committed, and why
+## Size, and the one exclusion
 
-Only size, in both cases:
+All three image corpora are committed, so every image figure in
+`DECISIONS.md` reproduces from a clone with no downloads. `documents/` and
+`pack/` cost 3.6MB together. `cheques/` costs 44MB for 10 images, which is
+most of this repo:
 
-- **`cheques/images`** — 87MB of 2365×1065 PNGs. The annotations and the
-  `_meta` provenance stay tracked; `python cheque_benchmark.py` re-fetches
-  the images from HuggingFace in one command. Apache-2.0 asks for
-  attribution on redistribution, and pointing at the source is cleaner
-  than vendoring 87MB into git history.
-- **`text/`** — 93MB of third-party parquets, fetched by
-  `benchmark_indiapii.py` and `benchmark_maskara.py` per their docstrings.
+- they are 2365×1065 with paper texture and ~138k unique colours, so PNG
+  has almost nothing to remove — lossless re-encoding saved 5%
+- the corpus was trimmed from 20 images to 10 to halve that, keeping all
+  four bank layouts (axis 3, canara 3, icici 2, syndicate 2)
+- JPEG q95 would be 15MB, but it changes pixels, and pixels are the input
+  to both the OCR and the coverage measurement — that is a re-measurement,
+  not a compression
 
-`documents/` and `pack/` are 3.6MB together and are committed, so the
-headline numbers in `DECISIONS.md` are reproducible from a clone with no
-downloads at all.
+**`text/` is the exclusion**: 93MB of third-party parquets, fetched by
+`benchmark_indiapii.py` and `benchmark_maskara.py` per their docstrings.
+Those are span-annotated text, not images, and nothing here re-derives
+them.
+
+Redistributing the cheques is fine under Apache-2.0; the licence and the
+upstream URL are recorded in `cheques/annotations.json` under `_meta`.
 
 ## Why two annotation kinds
 

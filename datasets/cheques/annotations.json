@@ -1,106 +1,23 @@
 {
   "_meta": {
-    "description": "Synthetic Indian bank cheques, four bank layouts.",
+    "description": "10 synthetic Indian bank cheques — all four bank layouts (axis 3, canara 3, icici 2, syndicate 2).",
     "source": "https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images",
     "licence": "Apache-2.0",
     "provenance": "Published by jaganadhg on HuggingFace, declared fully synthetic — generated cheque layouts with fabricated account holders, no real account data. Images are not redistributed here; cheque_benchmark.py fetches them from the source.",
-    "annotation": "box (coverage scoring); boxes are human-authored by the dataset's publishers, not by this project"
+    "annotation": "box (coverage scoring); boxes are human-authored by the dataset's publishers, not by this project",
+    "subset": "A 10-image slice of the published test split, chosen to keep every bank layout (axis 3, canara 3, icici 2, syndicate 2) and to retain syndicate_syn_0049, the image DECISIONS.md cites as the concrete cheque failure. Trimmed from 20 so the images could be tracked here: these are texture-heavy 2365x1065 PNGs that do not compress."
   },
-  "syndicate_syn_0005.png": {
+  "axis_syn_0001.png": {
     "pii": [
       {
         "field": "name",
         "expected_type": "PERSON",
         "tier": "core",
         "box": [
-          79,
-          217,
-          2348,
-          317
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          101,
-          500,
-          1365,
-          640
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1846,
-          714,
-          2201,
-          921
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "icici_syn_0018.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          83,
-          222,
-          2359,
-          348
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          150,
-          510,
-          845,
-          643
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1955,
-          686,
-          2300,
-          934
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "axis_syn_0027.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          67,
-          241,
-          2358,
-          360
+          70,
+          213,
+          2334,
+          310
         ]
       },
       {
@@ -109,9 +26,9 @@
         "tier": "core",
         "box": [
           120,
-          539,
-          834,
-          644
+          520,
+          848,
+          613
         ]
       },
       {
@@ -119,10 +36,10 @@
         "expected_type": null,
         "tier": "core",
         "box": [
-          1991,
-          696,
+          2006,
+          629,
           2317,
-          925
+          898
         ]
       }
     ],
@@ -174,143 +91,17 @@
       "barcode": 0
     }
   },
-  "syndicate_syn_0037.png": {
+  "axis_syn_0027.png": {
     "pii": [
       {
         "field": "name",
         "expected_type": "PERSON",
         "tier": "core",
         "box": [
-          79,
-          217,
-          2348,
-          317
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          101,
-          500,
-          1365,
-          640
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1846,
-          714,
-          2201,
-          921
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "icici_syn_0055.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          64,
-          205,
-          2331,
-          332
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          136,
-          517,
-          800,
-          641
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1936,
-          713,
-          2264,
-          913
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "syndicate_syn_0036.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          88,
-          198,
-          2336,
-          324
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          348,
-          517,
-          1243,
-          634
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1879,
-          663,
-          2295,
-          917
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "axis_syn_0061.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          72,
-          215,
+          67,
+          241,
           2358,
-          332
+          360
         ]
       },
       {
@@ -318,10 +109,10 @@
         "expected_type": "IN_BANK_ACCOUNT",
         "tier": "core",
         "box": [
-          113,
-          522,
-          813,
-          629
+          120,
+          539,
+          834,
+          644
         ]
       },
       {
@@ -329,304 +120,10 @@
         "expected_type": null,
         "tier": "core",
         "box": [
-          2022,
-          653,
-          2313,
-          903
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "canara_syn_0082.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          94,
-          200,
-          2339,
-          305
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          122,
-          519,
-          1094,
-          655
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1896,
-          678,
-          2246,
-          878
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "canara_syn_0016.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          91,
-          212,
-          2337,
-          319
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          110,
-          524,
-          1125,
-          662
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1865,
-          681,
-          2272,
-          895
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "axis_syn_0041.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          56,
-          220,
-          2327,
-          327
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          122,
-          515,
-          813,
-          622
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1977,
-          667,
-          2294,
-          898
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "syndicate_syn_0066.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          88,
-          198,
-          2336,
-          324
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          348,
-          517,
-          1243,
-          634
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1879,
-          663,
-          2295,
-          917
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "icici_syn_0071.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          78,
-          218,
-          2359,
-          342
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          145,
-          517,
-          819,
-          643
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1988,
-          698,
-          2355,
-          924
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "icici_syn_0065.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          74,
-          208,
-          2345,
-          339
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          150,
-          501,
-          848,
-          636
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1919,
-          636,
-          2345,
-          922
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "syndicate_syn_0021.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          88,
-          198,
-          2336,
-          324
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          348,
-          517,
-          1243,
-          634
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          1879,
-          663,
-          2295,
-          917
+          1991,
+          696,
+          2317,
+          925
         ]
       }
     ],
@@ -678,58 +175,16 @@
       "barcode": 0
     }
   },
-  "axis_syn_0001.png": {
+  "canara_syn_0016.png": {
     "pii": [
       {
         "field": "name",
         "expected_type": "PERSON",
         "tier": "core",
         "box": [
-          70,
-          213,
-          2334,
-          310
-        ]
-      },
-      {
-        "field": "acno",
-        "expected_type": "IN_BANK_ACCOUNT",
-        "tier": "core",
-        "box": [
-          120,
-          520,
-          848,
-          613
-        ]
-      },
-      {
-        "field": "sign",
-        "expected_type": null,
-        "tier": "core",
-        "box": [
-          2006,
-          629,
-          2317,
-          898
-        ]
-      }
-    ],
-    "visual": {
-      "face": 0,
-      "qr_code": 0,
-      "barcode": 0
-    }
-  },
-  "syndicate_syn_0049.png": {
-    "pii": [
-      {
-        "field": "name",
-        "expected_type": "PERSON",
-        "tier": "core",
-        "box": [
-          79,
-          217,
-          2351,
+          91,
+          212,
+          2337,
           319
         ]
       },
@@ -738,10 +193,10 @@
         "expected_type": "IN_BANK_ACCOUNT",
         "tier": "core",
         "box": [
-          108,
-          483,
-          1220,
-          645
+          110,
+          524,
+          1125,
+          662
         ]
       },
       {
@@ -749,10 +204,10 @@
         "expected_type": null,
         "tier": "core",
         "box": [
-          1860,
-          719,
-          2248,
-          928
+          1865,
+          681,
+          2272,
+          895
         ]
       }
     ],
@@ -804,17 +259,17 @@
       "barcode": 0
     }
   },
-  "canara_syn_0065.png": {
+  "icici_syn_0018.png": {
     "pii": [
       {
         "field": "name",
         "expected_type": "PERSON",
         "tier": "core",
         "box": [
-          96,
-          219,
-          2334,
-          359
+          83,
+          222,
+          2359,
+          348
         ]
       },
       {
@@ -822,10 +277,10 @@
         "expected_type": "IN_BANK_ACCOUNT",
         "tier": "core",
         "box": [
-          115,
-          550,
-          1110,
-          693
+          150,
+          510,
+          845,
+          643
         ]
       },
       {
@@ -833,10 +288,10 @@
         "expected_type": null,
         "tier": "core",
         "box": [
-          1894,
-          740,
-          2301,
-          919
+          1955,
+          686,
+          2300,
+          934
         ]
       }
     ],
@@ -845,5 +300,126 @@
       "qr_code": 0,
       "barcode": 0
     }
+  },
+  "icici_syn_0055.png": {
+    "pii": [
+      {
+        "field": "name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "box": [
+          64,
+          205,
+          2331,
+          332
+        ]
+      },
+      {
+        "field": "acno",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "tier": "core",
+        "box": [
+          136,
+          517,
+          800,
+          641
+        ]
+      },
+      {
+        "field": "sign",
+        "expected_type": null,
+        "tier": "core",
+        "box": [
+          1936,
+          713,
+          2264,
+          913
+        ]
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "syndicate_syn_0005.png": {
+    "pii": [
+      {
+        "field": "name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "box": [
+          79,
+          217,
+          2348,
+          317
+        ]
+      },
+      {
+        "field": "acno",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "tier": "core",
+        "box": [
+          101,
+          500,
+          1365,
+          640
+        ]
+      },
+      {
+        "field": "sign",
+        "expected_type": null,
+        "tier": "core",
+        "box": [
+          1846,
+          714,
+          2201,
+          921
+        ]
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "syndicate_syn_0049.png": {
+    "pii": [
+      {
+        "field": "name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "box": [
+          79,
+          217,
+          2351,
+          319
+        ]
+      },
+      {
+        "field": "acno",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "tier": "core",
+        "box": [
+          108,
+          483,
+          1220,
+          645
+        ]
+      },
+      {
+        "field": "sign",
+        "expected_type": null,
+        "tier": "core",
+        "box": [
+          1860,
+          719,
+          2248,
+          928
+        ]
+      }
+    ]
   }
 }

@@ -1202,3 +1202,48 @@ reaching 782 lines doing seven jobs. Both were cheap when caught and would
 have compounded. The rule carries its own guard: a structural change is
 only safe with a demonstration that behaviour did not move, and without
 one it is a rewrite.
+
+---
+
+## 2026-09-15 — Cheque corpus trimmed to 10 and committed
+
+**Status:** Active — `datasets/cheques/`
+
+The cheque images were the one corpus left out of the repo yesterday, on
+size: 87MB for 20. They are now **10 images, 44MB, tracked**, so every
+image benchmark in this file reproduces from a bare clone.
+
+**What the 10 are.** All four bank layouts (axis 3, canara 3, icici 2,
+syndicate 2), including `syndicate_syn_0049` — the cheque cited above as
+the concrete failure, where the payee name is entirely unredacted. A
+benchmark that drops its own worst case is not a benchmark.
+
+**Restated on the slice** (the 20-cheque figures above stand as measured):
+
+| field | 20 cheques | 10 cheques |
+|---|---:|---:|
+| account number | 17% | 27% |
+| payee name | 28% | 37% |
+| signature | 51% | 53% |
+| fully covered | 2/60 | 2/30 |
+
+**The slice is easier than the full set, and not by accident.** Taking the
+first images per bank is not random sampling; account number and payee
+name both come out ~10 points better. Quote these numbers against this
+slice, not as an improvement — nothing in the pipeline changed. The
+conclusion is the one that matters and it is unmoved: **2 regions in 30
+fully covered.** 93.5% describes printed forms, not cheques.
+
+**Why not compress further.** 2365×1065 with paper texture and ~138k
+unique colours: lossless PNG re-encoding recovered 5%. JPEG q95 would be
+15MB instead of 44MB, and was rejected — pixels are the input to both the
+OCR and the coverage measurement, so re-encoding them lossily is a
+re-measurement wearing a compression's clothes.
+
+**Bug found while doing this.** `cheque_benchmark.py --limit N` wrote the
+annotation file with `json.dumps(regions)`, which dropped the `_meta`
+block — the licence and upstream URL — and wrote a bare list where the
+loader expects `{"pii": [...]}`. Harmless while the file was gitignored
+and rebuilt every time; a silent licence deletion now that it is tracked.
+It now reads the existing `_meta` back and writes through
+`datasets.save()`.

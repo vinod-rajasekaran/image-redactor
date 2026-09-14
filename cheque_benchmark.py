@@ -26,9 +26,14 @@ definition: the payee name, the account number, and the signature. IFSC
 identifies a branch rather than a person, and the date and amount identify
 nobody — all three are excluded, consistent with `build_ground_truth.py`.
 
+Ten of these cheques are committed under `datasets/cheques/`, all four
+bank layouts, so scoring needs no download. Fetching is only for a larger
+slice; it overwrites the committed annotations, so `git checkout` the
+corpus afterwards if you want the tracked set back.
+
 Usage:
-    python cheque_benchmark.py                      # fetch 20 cheques
     python cheque_benchmark.py --score runs/cheques # coverage for a run
+    python cheque_benchmark.py --limit 40           # fetch a larger slice
 """
 from __future__ import annotations
 
@@ -96,10 +101,13 @@ def fetch(limit: int) -> None:
                     "box": [box["xmin"], box["ymin"], box["xmax"], box["ymax"]],
                 }
             )
-        regions[name] = items
+        regions[name] = {"pii": items}
         console.print(f"{name:30s} {row['bank']:12s} {len(items)} PII regions")
 
-    REGIONS.write_text(json.dumps(regions, indent=2))
+    # Keep whatever `_meta` the tracked corpus carries — the licence and
+    # provenance live there, and a fetch used to overwrite them away.
+    meta = json.loads(REGIONS.read_text()).get("_meta", {}) if REGIONS.exists() else {}
+    datasets.save("cheques", regions, meta)
     console.print(
         f"\n[green]{len(rows)} cheques -> {IMAGE_DIR}/[/green]  "
         f"regions -> {REGIONS}\n"
@@ -183,7 +191,7 @@ def score(run_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--score", default=None, metavar="RUN_DIR")
     args = parser.parse_args()
 

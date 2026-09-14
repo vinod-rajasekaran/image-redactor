@@ -22,9 +22,9 @@ redacted output to Claude and asking what remains readable.
 All five leaks are **partial coverage**: the entity was found, the box did
 not cover all of it.
 
-**That number does not generalise, and we can prove it.** On 20 synthetic
-Indian cheques from an unrelated dataset, only 2 of 60 PII regions are
-fully covered — mean coverage 17% for account numbers, 28% for payee
+**That number does not generalise, and we can prove it.** On 10 synthetic
+Indian cheques from an unrelated dataset, only 2 of 30 PII regions are
+fully covered — mean coverage 27% for account numbers, 37% for payee
 names. Cheques carry handwriting and signatures throughout, and the
 handwritten payee name is unreadable to both OCR engines. 93.5% describes
 printed forms and ID cards, half of which this project generated; see
@@ -246,16 +246,19 @@ Apache-2.0) with human-authored field boxes. The first test data here that
 nobody on this project labelled:
 
 ```bash
-python cheque_benchmark.py                      # fetch 20
-python evaluate_redactor.py --input cheque_images --run-name cheques
+python evaluate_redactor.py --input datasets/cheques/images --run-name cheques
 python cheque_benchmark.py --score runs/cheques
 ```
 
+The 10 cheques are in the repo, so no fetch step is needed.
+`python cheque_benchmark.py --limit N` re-fetches from HuggingFace if you
+want a larger slice.
+
 | field | mean covered |
 |---|---:|
-| signature | 51% |
-| payee name | 28% |
-| account number | 17% |
+| signature | 53% |
+| payee name | 37% |
+| account number | 27% |
 
 Because these boxes are trustworthy, this is the one place *coverage* is a
 meaningful metric — the same measurement computed from vision-generated
