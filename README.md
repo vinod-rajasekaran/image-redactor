@@ -116,9 +116,11 @@ Aadhaar silently leaves it unredacted**.
 
 This harness therefore registers an OCR-tolerant fallback recognizer by
 default: a checksum-free `IN_AADHAAR` pattern for the 4-4-4 grouped form
-at score 0.5. Measured effect on the test set — the hospital report's
-deliberately checksum-invalid Aadhaar is redacted in default mode and
-**missed entirely** under `--strict-aadhaar`.
+at score 0.5. It is not a theoretical concern — on a real sample Aadhaar
+card image, the printed number `4587 6321 9876` is checksum-invalid, so
+stock Presidio redacted **nothing**; the fallback caught it. Across a
+20-image set, default mode found 15 `IN_AADHAAR` spans vs 9 under
+`--strict-aadhaar`.
 
 The fallback carries no look-around guards on purpose. OCR flattens a
 page into a single string with no field boundaries, so an adjacent phone
@@ -146,6 +148,20 @@ it.** It matches `KA05MJ4521` but not `KA 05 MJ 4521` (the spaced form
 printed on real plates and RCs). In testing Tesseract also misread
 `KA05MJ4521` as `KA**O**5MJ4521` (digit `0` → letter `O`), which defeats
 the regex. No OCR-tolerant fallback is provided for this one.
+
+**5. Only OCR'd text is redacted — faces and QR codes are not.**
+`ImageRedactorEngine` blacks out text regions found via OCR. On a real
+Aadhaar card it correctly redacts name, DOB and the number, but leaves
+the **photo** and the **QR code** fully intact. An Aadhaar QR encodes
+the holder's name, DOB and address, so a card redacted this way is not
+meaningfully redacted. Any ID-document workflow needs separate face and
+barcode/QR handling on top of Presidio.
+
+**6. Cropped or truncated values defeat pattern recognizers.** A PAN
+visible only as `DE1234F` (rather than the full `ABCDE1234F`) does not
+match `IN_PAN`, because the pattern needs the complete
+5-letter/4-digit/1-letter form. Partially visible IDs at frame edges
+pass through unredacted.
 
 ### Relevant to kaapi-guardrails
 
