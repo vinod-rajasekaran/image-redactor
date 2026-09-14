@@ -41,14 +41,17 @@ source venv/bin/activate
 # Optional: create 10 synthetic Indian-context PII documents in input_images/
 python generate_test_images.py
 
-# Redact input_images/ -> output_images/
+# Redact input_images/ -> runs/<timestamp>_tesseract_visual/images/
 python evaluate_redactor.py
+
+# Score that run for leakage against ground truth
+python score_run.py runs/<run-name>
 ```
 
 Or point at your own folders:
 
 ```bash
-python evaluate_redactor.py --input path/to/images --output path/to/redacted
+python evaluate_redactor.py --input path/to/images --runs-dir path/to/runs
 ```
 
 ### Options
@@ -58,20 +61,22 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 | `--input` | `input_images` | Folder of images to redact |
 | `--runs-dir` | `runs` | Parent folder; each run gets its own subfolder |
 | `--run-name` | timestamp + settings | Name for this run's folder |
-| `--ocr` | `tesseract` | OCR backend: `tesseract` or `paddle` |
+| `--ocr` | `tesseract` | OCR backend: `tesseract`, `paddle` or `rapidocr` |
+| `--psm` | `4` | Tesseract page-segmentation mode (3, 4, 6, 11, 12) |
 | `--no-visual-pii` | off | Skip face and QR/barcode redaction (on by default) |
 | `--pyzbar` | off | Also decode code payloads with pyzbar (needs `zbar`) |
 | `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
 | `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
-| `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback (see below) |
+| `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback |
+| `--wechat-qr` | off | Also run the WeChat QR detector (supplement, not replacement) |
 
 `--threshold` and `--entities` mirror the `threshold` / `entity_types`
 config in [kaapi-guardrails' `pii_remover` validator](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md),
 so this harness can be pointed at the same settings that validator runs
 in production. The one deliberate divergence is the **default** threshold
-(0.4 here vs 0.5 there) — see finding 3 below for why 0.5 silently misses
-PAN, voter and passport numbers.
+(0.4 here vs 0.5 there) — see "Why the defaults are what they are" for why
+0.5 silently misses PAN, voter and passport numbers.
 
 ```bash
 # Only redact names and Aadhaar numbers, aggressively
@@ -83,9 +88,8 @@ python evaluate_redactor.py --entities PERSON IN_AADHAAR --threshold 0.3
 run the generator first. Supported formats: `.png .jpg .jpeg .tiff
 .bmp`.
 
-`input_images/` and `output_images/` are git-ignored, since they may
-contain real PII from images you drop in — nothing there gets
-committed.
+`input_images/`, `runs/` and `ground_truth.json` are git-ignored, since
+they describe or contain real PII from images you drop in.
 
 ## Output
 
@@ -146,7 +150,8 @@ giving up.
 | Default | Why not the obvious choice | What it buys |
 |---|---|---|
 | `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 silently drops every context-boosted weak match | A real PAN card's number is redacted instead of left visible; `IN_VOTER` too. At 0.5, `IN_PASSPORT` can *never* fire |
-| `--ocr tesseract` | PaddleOCR leaks less PII — 84.7% recall vs 74.1% | 23x faster (12.5s vs 285s for 20 images), which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not for production redaction |
+| `--ocr tesseract` | PaddleOCR leaks less PII — 84.7% recall vs 76.5% | ~17x faster, which makes iteration practical. **Use `--ocr paddle` for any run whose output you intend to rely on**; the speed default is for development, not production redaction |
+| `--psm 4` | Tesseract's own default is 3 | +2.4 points of recall (76.5% vs 74.1%) for no extra time. PSM 4, 6 and 11 tie exactly; 4 matches the layout these documents actually have |
 | `--upscale auto` | Leaving images at native size is simpler | A real job-application photo went from **0 detections to 7**. Also *raises* precision: the PAN card dropped from 9 spurious `PERSON` hits to a correct 4 |
 | visual PII **on** | Presidio only ever redacts OCR'd text | Faces, QR codes and barcodes get redacted. An intact Aadhaar QR encodes name, DOB and address — redacting the printed number while leaving the QR is not redaction |
 | OpenCV `detect()`, never `detectAndDecode()` | The decode APIs look strictly more capable | Decode-gated APIs return **no box** for a code they cannot read, silently skipping exactly the unreadable codes that most need blacking out. This bug shipped once here and was caught only because a barcode count stayed at 0 |
@@ -214,40 +219,41 @@ rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
 
 ## Benchmark: OCR backends, measured by leakage
 
-Scored with `score_run.py` against `ground_truth.json` over the same 20
-images (10 synthetic, 10 photos of Indian documents). "Leaked" means the
-PII was legible in the input and is *still legible in the redacted
-output* — the only measure that matters.
+Produced by `benchmark_ocr.py` over the same 20 images (10 synthetic, 10
+photos of Indian documents), scored with `score_run.py`. "Leaked" means
+the PII was legible in the input and is **still legible in the redacted
+output** — the only measure that matters. 11 further items are illegible
+to every engine and are excluded from recall.
 
-| run | redacted | leaked | recall on legible PII | seconds |
-|-----|---------:|-------:|----------------------:|--------:|
-| tesseract | 63 | 22 | 74.1% | 12.5 |
-| paddle | **72** | **13** | **84.7%** | 285 |
+| config | redacted | leaked | recall | wall s |
+|---|---:|---:|---:|---:|
+| **paddle** | 72 | 13 | **84.7%** | 434 |
+| tesseract `--psm 4` *(default)* | 65 | 20 | 76.5% | 26 |
+| tesseract `--psm 6` | 65 | 20 | 76.5% | 25 |
+| tesseract `--psm 11` | 65 | 20 | 76.5% | 27 |
+| rapidocr | 64 | 21 | 75.3% | 40 |
+| tesseract `--psm 3` | 63 | 22 | 74.1% | 31 |
+| tesseract `--psm 12` | 63 | 22 | 74.1% | 37 |
 
-Paddle leaks 9 fewer items: `PERSON` 3 → **0**, `LOCATION` 8 → **4**,
-`IN_PASSPORT` 1 → **0**. It reads the email Tesseract garbled, reads the
-laptop-screen loan form Tesseract could not read at all, and gets
-`KA05MJ4521` where Tesseract returns `KAO5MJ4521`. The cost is **~23x
-slower** on CPU. A further 11 items are illegible to *both* engines.
+Three things this settles:
 
-**Two bugs this benchmark caught, and why counting detections would not
-have.** Before these fixes Paddle scored **62.4%** — *worse* than
-Tesseract — while simultaneously reporting **more** detections (234 vs
-205). Both bugs produced that same misleading signature:
+- **Page-segmentation mode is a free win.** PSM 4, 6 and 11 all score
+  76.5% against Tesseract's own default of 3 at 74.1%, for no extra time.
+  PSM 4 (single column of variable-size text) is now the default; the
+  three-way tie means the choice between them is arbitrary.
+- **RapidOCR is not a middle ground.** It was expected to approach
+  Paddle's accuracy on a lighter runtime, on the assumption it ran the
+  same models. It does not: it ships **PP-OCRv4 mobile**, while
+  PaddleOCR 3.7 runs **PP-OCRv6_medium** — two major versions newer and
+  a larger variant. At 75.3% and 40s it is dominated by `--psm 4`, which
+  is both more accurate and faster. Pointing RapidOCR at exported v5/v6
+  ONNX models might change this, but that is unexplored.
+- **There is no cheap path to Paddle's accuracy.** The 8-point gap
+  between `--psm 4` and Paddle costs ~17x in wall time. Nothing tested
+  sits in between.
 
-1. Paddle detects text *lines*, not words. Estimating word positions by
-   character count assumes uniform spacing, which is wrong for
-   label/value forms: the wide gap shifted every box leftward onto the
-   label, leaving the value legible. Each word now carries its whole
-   line box, over-redacting the label instead.
-2. PaddleOCR 3.x runs document orientation and UVDoc unwarping by
-   default, and reports boxes in that *rectified* space — roughly 40px
-   off from the image being redacted, enough to black the row above the
-   PII. Both are now disabled in `ocr_backends.py`; do not re-enable
-   them without re-scoring.
-
-An entity-count comparison rated the broken configuration as the better
-one. Only reading the output back caught it.
+Recommendation: `--psm 4` (the default) for iteration, `--ocr paddle`
+for any output you intend to rely on.
 
 ## Relation to kaapi-guardrails
 

@@ -320,14 +320,53 @@ splitting, without re-running `score_run.py`.
 
 ---
 
-## 2026-09-14 — OCR backend benchmark (Tesseract PSM variants, RapidOCR)
+## 2026-09-14 — Default Tesseract PSM 4, not Tesseract's own 3
 
 **Status:** Active
 
-See `runs/benchmark.json` and the README's benchmark table for current
-numbers, produced by `benchmark_ocr.py`.
+**Why:** the question was whether anything sits between Tesseract
+(74.1%, cheap) and Paddle (84.7%, ~17x slower). Page-segmentation mode
+turned out to be a free improvement.
 
-**Why:** the Tesseract/Paddle gap (74.1% vs 84.7%) came with a ~23x
-latency cost, so the question was whether anything sits between them.
+**Evidence:** PSM 4, 6 and 11 all score **76.5%** against PSM 3's
+**74.1%**, at identical cost. The three-way tie makes the choice between
+them arbitrary; 4 ("single column of variable-size text") matches the
+layout of the documents in scope.
 
-**Evidence:** recorded in the README benchmark table.
+---
+
+## 2026-09-14 — RapidOCR rejected as a middle ground
+
+**Status:** Rejected (backend retained as `--ocr rapidocr`)
+
+**Why it was expected to work:** RapidOCR runs PaddleOCR-family models on
+ONNXRuntime, so it should have approached Paddle's accuracy at a fraction
+of the cost and without the paddlepaddle runtime.
+
+**Why that reasoning was wrong:** the models are not the same generation.
+RapidOCR ships **PP-OCRv4 mobile** (4MB detection, 10MB recognition),
+while PaddleOCR 3.7 runs **PP-OCRv6_medium** — two major versions newer
+and a larger variant. The assumption of "same model lineage" was simply
+incorrect.
+
+**Evidence:** **75.3% recall at 40s**, versus `--psm 4` at **76.5% and
+26s**. It is dominated on both axes, so there is no reason to prefer it
+as configured. Pointing it at exported v5/v6 ONNX models could change
+this and is unexplored.
+
+**Conclusion of the search:** nothing tested sits between `--psm 4` and
+Paddle. The 8-point gap costs ~17x in wall time, and that trade is real
+rather than an artefact of tuning.
+
+---
+
+## 2026-09-14 — Benchmark harness
+
+**Status:** Active
+
+`benchmark_ocr.py` runs every OCR configuration over the same images,
+scores each with `score_run.py`, and tabulates recall against wall-clock
+cost into `runs/benchmark.json`.
+
+**Why:** OCR choices had been argued from entity counts and single-image
+spot checks, both of which had already produced wrong conclusions.
