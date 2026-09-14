@@ -191,6 +191,7 @@ def build_engines(
     ocr_tolerant_aadhaar: bool = True,
     ocr_backend: str = "tesseract",
     psm: int | None = None,
+    medical_ner: bool = False,
 ):
     """Construct Presidio's image analyzer + redactor engines.
 
@@ -213,6 +214,28 @@ def build_engines(
         len(INDIA_RECOGNIZER_NAMES),
         ", ".join(INDIA_RECOGNIZER_NAMES),
     )
+
+    from custom_recognizers import build_custom_recognizers
+
+    custom = build_custom_recognizers()
+    for recognizer in custom:
+        registry.add_recognizer(recognizer)
+    logger.info(
+        "Registered %d custom Indian recognizers: %s",
+        len(custom),
+        ", ".join(sorted({r.supported_entities[0] for r in custom})),
+    )
+
+    if medical_ner:
+        try:
+            from presidio_analyzer.predefined_recognizers import MedicalNERRecognizer
+
+            registry.add_recognizer(MedicalNERRecognizer())
+            logger.info("Medical NER enabled (blaze999/Medical-NER)")
+        except Exception:
+            logger.exception(
+                "Could not load MedicalNERRecognizer — continuing without it"
+            )
 
     if ocr_tolerant_aadhaar:
         registry.add_recognizer(build_aadhaar_ocr_fallback_recognizer())
@@ -461,6 +484,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--medical-ner",
+        action="store_true",
+        help=(
+            "Also detect clinical entities (diagnoses, medications) with "
+            "HuggingFace blaze999/Medical-NER. Off by default: pulls in "
+            "transformers and downloads a model on first use"
+        ),
+    )
+    parser.add_argument(
         "--no-visual-pii",
         dest="visual_pii",
         action="store_false",
@@ -568,6 +600,7 @@ def main() -> None:
         "image_count": len(image_paths),
         "ocr_backend": args.ocr,
         "psm": args.psm,
+        "medical_ner": args.medical_ner,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -587,6 +620,7 @@ def main() -> None:
         ocr_tolerant_aadhaar=not args.strict_aadhaar,
         ocr_backend=args.ocr,
         psm=args.psm,
+        medical_ner=args.medical_ner,
     )
 
     analyzer_kwargs: dict = {"score_threshold": args.threshold}

@@ -69,6 +69,7 @@ python evaluate_redactor.py --input path/to/images --runs-dir path/to/runs
 | `--entities` | all supported | Restrict to specific entity types |
 | `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
 | `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback |
+| `--medical-ner` | off | Detect diagnoses/medications (HuggingFace Medical-NER) |
 | `--wechat-qr` | off | Also run the WeChat QR detector (supplement, not replacement) |
 
 `--threshold` and `--entities` mirror the `threshold` / `entity_types`
@@ -172,6 +173,24 @@ over-redact regions that were PII anyway, which is the right trade here.
 
 ## Indian entity support
 
+`custom_recognizers.py` adds seven entities Presidio has no recognizer
+for, found by ground-truth scoring: `IN_IFSC`, `IN_DRIVING_LICENCE`,
+`IN_BANK_ACCOUNT`, `IN_PATIENT_ID` (UHID/MRN), `IN_PNR`,
+`IN_POLICY_NUMBER` and `IN_MEDICAL_REG`. They lifted recall from 76.5%
+to 81.2%.
+
+Two of those have distinctive shapes and fire on their own — an IFSC's
+mandatory `0` in position five makes it near-unambiguous. The rest are
+**shapeless**: an account number is a run of digits, a PNR is six
+alphanumerics. Those carry a deliberately low base score and rely on
+Presidio's context boost to clear the threshold, so they fire beside
+"Account No." and stay silent elsewhere.
+
+That only works because OCR puts the label next to its value. Tesseract
+PSM 4 does; PSM 3 emits every label before every value and would strand
+them. **Re-score after changing OCR backend or PSM.**
+
+
 Presidio ships India-specific recognizers but **registers none of them
 by default** — a stock `AnalyzerEngine()` loads only US/UK recognizers.
 This harness registers all six explicitly in `build_engines()`:
@@ -189,11 +208,11 @@ and is what kaapi-guardrails runs in production, so it's kept as-is.
 What this tool still does not redact, as of the latest run. History and
 rationale for every design choice live in [DECISIONS.md](DECISIONS.md).
 
-- **Faces and codes are detected, but text is the weak point.** Remaining
-  leaks cluster in `LOCATION` (multi-line addresses partially covered,
-  leaving enough to reconstruct) and in values **no Presidio recognizer
-  covers** — Indian bank account numbers, hospital UHIDs, airline PNRs,
-  policy numbers. Custom `PatternRecognizer`s are the obvious next step.
+- **Multi-line addresses are the largest remaining leak.** `LOCATION`
+  spans get partially covered, leaving enough to reconstruct the address.
+- **Clinical free text** (a diagnosis) is not a pattern and needs a
+  model; `--medical-ner` covers it, off by default because it pulls in
+  transformers and downloads a model.
 - **OCR errors defeat exact-pattern entities.** An email read as
   `oriyasharma@grmal ON` never matches `EMAIL_ADDRESS`; a vehicle
   registration read as `KAO5MJ4521` (letter `O` for digit `0`) never
