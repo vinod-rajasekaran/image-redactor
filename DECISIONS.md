@@ -823,3 +823,48 @@ counts as PII, by under-reading the output, and by reporting a leak count
 of zero. Every correction moved the headline. The consistent cause is
 that a scorer built from the same components as the tool shares its blind
 spots.
+
+---
+
+## 2026-09-14 — Automated vision scoring (`vision_score.py`)
+
+**Status:** Active
+
+Shows each redacted output image to `claude-opus-5` alongside the values
+ground truth says were on that page, and asks which remain readable.
+Writes `runs/<run>/vision_verdicts.json`, which `score_run.py` prefers
+over its own OCR verdicts. Needs `ANTHROPIC_API_KEY` in `.env`.
+
+**Final figure: 93.5% (72/77), five confirmed leaks, zero unverifiable.**
+
+**It beat both previous scorers, including the manual pass.** Sequence on
+the same run:
+
+| scorer | recall | leaks found |
+|---|---|---:|
+| OCR | 88.3% – 100.0% | 0 |
+| manual, by eye | 96.1% | 3 |
+| **vision** | **93.5%** | **5** |
+
+The two the manual pass missed: `12, MG Road, Andheri West,` on the
+synthetic Aadhaar card, where `12, MG R` is legible before the box and
+`shtra - 400058` after it — enough to reconstruct the address — and
+`Deepika Iyer` on the rental agreement. The eyeball pass had not reviewed
+the synthetic images at all, assuming OCR was reliable there. It was not.
+
+The five leaks are all partial-coverage failures on address and name
+fields, not missed detections.
+
+**Prompt choice that matters:** the model is told to answer "leaked" when
+a value is ambiguous, because under-reporting a leak is the more
+dangerous error in a privacy audit. `Deepika Iyer` is exactly that case —
+the manual pass called a visible `lyer` fragment redacted; the model
+called it leaked. Both defensible; the scorer is deliberately biased
+toward the safer answer.
+
+**Sixth and final correction to this metric.** It has been wrong by
+excluding unreadable items, by counting them all as leaks, by
+mislabelling what counts as PII, by under-reading the output, by
+reporting zero leaks, and by trusting a manual pass that skipped half the
+corpus. The through-line every time: a scorer that shares the tool's
+blind spots cannot find the tool's failures.
