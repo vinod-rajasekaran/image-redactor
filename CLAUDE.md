@@ -60,14 +60,17 @@ detail:
   deliberate one). Generate a valid one by brute-forcing the last
   digit against `InAadhaarRecognizer().validate_result()`.
 
-## Threshold 0.5 is a trap
+## Threshold 0.5 is a trap — default here is 0.4
 
 Presidio's context boost is +0.35 and several India recognizers use a
 0.1 base pattern, so context-boosted weak matches land at exactly
-**0.45** — just under the 0.5 default. Verified: a real PAN card's
+**0.45** — just under the conventional 0.5. Verified: a real PAN card's
 number was left visible at 0.5 and redacted at 0.4; same for a voter ID.
-The default stays 0.5 only for parity with kaapi-guardrails. Recommend
-`--threshold 0.4` whenever the answer matters more than the comparison.
+
+`--threshold` therefore defaults to **0.4**, a deliberate divergence
+from kaapi-guardrails' documented 0.5. Don't "restore" it to 0.5 for
+consistency — that reintroduces a known PII leak. Pass 0.5 explicitly
+only to reproduce that validator's current behaviour for comparison.
 
 ## Upscaling
 

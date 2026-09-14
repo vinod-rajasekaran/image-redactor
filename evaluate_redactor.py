@@ -360,8 +360,12 @@ def main() -> None:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.5,
-        help="Minimum Presidio confidence score to redact (default: 0.5)",
+        default=0.4,
+        help=(
+            "Minimum Presidio confidence score to redact (default: 0.4). "
+            "Deliberately below Presidio's usual 0.5: context-boosted weak "
+            "patterns land at 0.45, so 0.5 silently misses PAN/voter/passport"
+        ),
     )
     parser.add_argument(
         "--entities",

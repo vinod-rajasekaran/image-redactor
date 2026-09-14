@@ -47,7 +47,7 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 |------|---------|-------------|
 | `--input` | `input_images` | Folder of images to redact |
 | `--output` | `output_images` | Folder for redacted images + report |
-| `--threshold` | `0.5` | Minimum Presidio confidence score to redact |
+| `--threshold` | `0.4` | Minimum Presidio confidence score to redact |
 | `--entities` | all supported | Restrict to specific entity types |
 | `--upscale` | `auto` | Pre-OCR upscale factor; `auto` scales narrow images toward 600px wide, `1` disables |
 | `--strict-aadhaar` | off | Disable the OCR-tolerant Aadhaar fallback (see below) |
@@ -55,7 +55,9 @@ python evaluate_redactor.py --input path/to/images --output path/to/redacted
 `--threshold` and `--entities` mirror the `threshold` / `entity_types`
 config in [kaapi-guardrails' `pii_remover` validator](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md),
 so this harness can be pointed at the same settings that validator runs
-in production.
+in production. The one deliberate divergence is the **default** threshold
+(0.4 here vs 0.5 there) — see finding 3 below for why 0.5 silently misses
+PAN, voter and passport numbers.
 
 ```bash
 # Only redact names and Aadhaar numbers, aggressively
@@ -159,9 +161,9 @@ matched the weak pattern and scored 0.45.
 | real PAN card | nothing | `IN_PAN` ✓ |
 | voter ID | nothing | `IN_VOTER` ✓ |
 
-**Recommendation: run `--threshold 0.4` for Indian ID documents.** The
-default stays 0.5 only so this harness mirrors kaapi-guardrails'
-documented default.
+**This harness therefore defaults to `--threshold 0.4`,** deliberately
+diverging from kaapi-guardrails' documented 0.5. Pass `--threshold 0.5`
+explicitly to reproduce that validator's current behaviour.
 
 **4. `IN_VEHICLE_REGISTRATION` needs the unspaced form, and OCR breaks
 it.** It matches `KA05MJ4521` but not `KA 05 MJ 4521` (the spaced form
