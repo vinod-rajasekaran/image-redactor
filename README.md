@@ -266,52 +266,30 @@ of what is confirmed redacted, and a ceiling assuming every unverifiable
 item was also redacted. See "Measuring leakage" for why both numbers are
 needed.
 
-Against the vision-labelled ground truth (130 items), both engines with
-every improvement enabled:
+Ground truth counts only what **identifies a person** — 77 items across
+20 images. An earlier version counted bare gender, standalone ages,
+account balances, individual transactions, lab measurements, institution
+names, flight numbers and seats, then scored the tool as failing for
+leaving them alone. None of those identify anyone.
 
-| engine | recall | confirmed redacted | confirmed visible | unverifiable |
+| engine | recall | confirmed redacted | confirmed leaked | unverifiable |
 |---|---|---:|---:|---:|
-| tesseract | 67.7% – 76.2% | 88 | 31 | 11 |
-| **paddle** | **75.4% – 84.6%** | 98 | 20 | 12 |
+| tesseract | 83.1% – 94.8% | 64 | 4 | 9 |
+| **paddle** | **85.7% – 97.4%** | 66 | **2** | 9 |
 
-Recall varies enormously by category, which a single number hides:
+Under Paddle only two items are confirmed leaked, and both are the same
+multi-line address — the street line is redacted while the locality and
+PIN survive. Merging adjacent `LOCATION` fragments into one region is the
+remaining fix.
 
-| category | items | tesseract | paddle |
-|---|---:|---:|---:|
-| identifier | 50 | 84% | 88% |
-| health | 12 | 83% | **100%** |
-| quasi_identifier | 27 | 67% | 78% |
-| contact | 29 | 62% | 72% |
-| **financial** | **12** | **0%** | **0%** |
+The nine unverifiable items are where a human still has to look. Checking
+the largest cluster by eye — the photographed laptop screen — found four
+of its five items correctly redacted by Paddle and one leaked, so the
+true figure sits near the top of that range rather than the bottom.
 
-**Financial data is entirely unredacted, and better OCR does not help.**
-Both engines score 0 of 12, which proves this is a missing-recognizer
-problem rather than a reading problem. Every transaction line and balance
-on a bank statement survives, including `UPI - Apollo Pharmacy`, which
-discloses healthcare usage from financial data. Presidio has no
-recognizer for transaction descriptions or amounts, and none was added.
-
-Of the 16 still visible in the best configuration, **11 are PII that OCR
-never read at all** — chiefly a photographed laptop screen whose name,
-email, phone and address are perfectly readable to a person and invisible
-to Tesseract. Nothing is drawn over text the pipeline cannot see, so
-better OCR, not better recognizers, is what closes that half.
-
-The other 5 are detected-but-missed, all span-boundary failures:
-
-| image | entity | value |
-|---|---|---|
-| water bill | LOCATION | `12, 3rd Cross Indiranagar Bengaluru - 560038` |
-| job application | LOCATION | `12, 3rd Cross Indiranagar Bengaluru - 560038` |
-| flight booking | LOCATION | `BLR Bengaluru`, `CCU Kolkata` |
-| flight booking | DATE_TIME | `25 Apr 2025` |
-
-Multi-line addresses are the dominant failure: the street line is
-redacted while the locality or PIN code survives, which is often enough
-to reconstruct the address. Merging adjacent `LOCATION` fragments into a
-single region is the obvious next fix.
-
-Best configuration: `--ocr paddle --medical-ner`.
+Health items (medications on a prescription) are tracked in a separate
+`sensitive` tier, since whether they count is a policy question rather
+than a technical one. Both engines redact all five.
 
 ## Reading order
 

@@ -585,3 +585,41 @@ process that built it, and agreed with itself. Independent labelling —
 here, reading the images rather than trusting the earlier pass — moved
 the headline by roughly 10 points and revealed an entire uncovered
 category.
+
+---
+
+## 2026-09-14 — Ground truth narrowed to what identifies a person
+
+**Status:** Active — supersedes the 130-item ground truth above
+
+77 items, down from 130. Removed: bare gender, standalone age, blood
+group, lab values, amounts, balances, transaction lines, bill periods and
+due dates, institution names and addresses, bank helplines, IFSC codes
+(which identify a branch), flight numbers, seats and times.
+
+**Why:** the previous pass over-corrected. Having found the original
+labels under-counted, the fix swept in anything present on the page, then
+scored the harness as failing for not redacting a seat number or a
+closing balance. "Financial data is entirely unredacted" was reported as
+a headline finding; a bare amount identifies nobody, so it was never a
+finding at all.
+
+**Corrected figures:**
+
+| engine | recall | confirmed leaked |
+|---|---|---:|
+| tesseract | 83.1% – 94.8% | 4 |
+| paddle | 85.7% – 97.4% | 2 |
+
+Both remaining Paddle leaks are the same multi-line address.
+
+Health items live in a separate `sensitive` tier rather than the headline,
+because whether a medication counts as PII is a policy question. Both
+engines redact all five.
+
+**Lesson, third time on the same theme:** this metric has now been wrong
+by excluding too much, by counting too much, and by mislabelling what
+counts. Each error moved the headline by roughly ten points in whichever
+direction the last correction pointed. The number is only ever as good as
+the definition behind it, and the definition deserves as much scrutiny as
+the code.

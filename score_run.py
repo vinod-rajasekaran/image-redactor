@@ -125,7 +125,7 @@ def main() -> None:
     rows = []
     totals = {"redacted": 0, "leaked": 0, "unverifiable": 0}
     per_type: dict[str, dict[str, int]] = {}
-    per_category: dict[str, dict[str, int]] = {}
+    per_tier: dict[str, dict[str, int]] = {}
 
     for name, entry in sorted(truth.items()):
         src, out = input_dir / name, images_dir / name
@@ -148,11 +148,11 @@ def main() -> None:
                 key, {"redacted": 0, "leaked": 0, "unverifiable": 0}
             )
             per_type[key][verdict] += 1
-            cat = item.get("category", "uncategorised")
-            per_category.setdefault(
+            cat = item.get("tier", "core")
+            per_tier.setdefault(
                 cat, {"redacted": 0, "leaked": 0, "unverifiable": 0}
             )
-            per_category[cat][verdict] += 1
+            per_tier[cat][verdict] += 1
         rows.append((name, entry["source"], counts))
 
     table = Table(title=f"Leakage by image — {summary['config']['run_name']}")
@@ -181,13 +181,13 @@ def main() -> None:
         )
     console.print(ttable)
 
-    ctable = Table(title="By PII category")
-    ctable.add_column("category", style="cyan")
+    ctable = Table(title="By PII tier")
+    ctable.add_column("tier", style="cyan")
     ctable.add_column("redacted", justify="right", style="green")
     ctable.add_column("leaked", justify="right", style="red")
     ctable.add_column("unverifiable", justify="right", style="yellow")
     ctable.add_column("floor %", justify="right")
-    for cat, c in sorted(per_category.items(), key=lambda kv: -sum(kv[1].values())):
+    for cat, c in sorted(per_tier.items(), key=lambda kv: -sum(kv[1].values())):
         n = sum(c.values())
         ctable.add_row(
             cat, str(c["redacted"]), str(c["leaked"]), str(c["unverifiable"]),
@@ -222,7 +222,7 @@ def main() -> None:
                 "recall_ceiling_pct": round(ceiling, 1),
                 "confirmed_visible": totals["leaked"],
                 "by_type": per_type,
-                "by_category": per_category,
+                "by_tier": per_tier,
                 "by_image": {n: c for n, _s, c in rows},
             },
             indent=2,
