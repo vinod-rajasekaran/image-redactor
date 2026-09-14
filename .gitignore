@@ -189,3 +189,6 @@ cython_debug/
 .cursorindexingignore
 # Ground truth describes PII in local test images; regenerate with build_ground_truth.py
 ground_truth.json
+
+# Third-party benchmark data (download via benchmark_indiapii.py instructions)
+benchmarks/

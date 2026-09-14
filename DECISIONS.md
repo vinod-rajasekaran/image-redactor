@@ -667,3 +667,63 @@ one.
 24.2s for 20 images). With `--medical-ner` it adds 44% (32.9s → 47.5s),
 because the transformer model is compute-bound in-process and runs once
 per variant. It should run once per image instead; that is not yet fixed.
+
+---
+
+## 2026-09-14 — Evaluated against IndiaPII-Bench (maskflow-ai)
+
+**Status:** Active
+
+`benchmark_indiapii.py` scores our recognizer stack against
+[IndiaPII-Bench](https://huggingface.co/datasets/maskflow-ai/indiapii-bench)
+— 2,000 synthetic Indian documents, 12,065 labelled PII spans and 1,403
+PII-shaped decoys, CC-BY-4.0.
+
+**Why it is worth having:** it is plain text, so it isolates the
+recognizer layer from OCR entirely — a miss here is a recognizer gap and
+nothing else. And it supplies **hard negatives**, which our own ground
+truth has none of. Our sample set can only measure recall; it is
+structurally blind to over-redaction.
+
+**Result on 400 documents: 76.2% recall on real PII.**
+
+Our custom recognizers validated at 100%: `IN_BANK_ACCOUNT`, `IN_IFSC`,
+`IN_DRIVING_LICENCE`, alongside `IN_PAN`, `IN_AADHAAR`, `IN_VOTER`,
+`IN_PASSPORT` and `PHONE_NUMBER`.
+
+**The important correction — `PERSON_NAME` scores 59%.** An earlier entry
+concluded `en_core_web_lg` was fine for Indian names on the strength of a
+19/20 hand-picked sample. Against 416 varied names it finds 59%. The
+sample was too small and biased toward common, well-attested names;
+misses cluster on single-token and rarer names (*Syediliyas*,
+*Arulananthan*, *Garbhadharin*, *Priyavaarshini*). The NER model is a
+real weakness, not a settled question.
+
+**Decoys:** only **3%** are flagged as the type they mimic — and every
+one of those is `NON_VERHOEFF_AADHAAR_SHAPED`, which we flag *by design*.
+The OCR-tolerant Aadhaar fallback deliberately ignores the checksum,
+because in an image a checksum failure usually means a misread digit. In
+their text domain there is no OCR, so a checksum failure really does mean
+"not an Aadhaar" and flagging it is an error. **The same behaviour is
+correct in our domain and wrong in theirs.** Zero false positives on
+PAN-shaped invoice numbers, order IDs or timestamps.
+
+**Gaps their entity set exposes:** we have no recognizer for `UPI_VPA`,
+`ABHA_NUMBER`/`ABHA_ADDRESS` (health IDs) or `PIN_CODE`, and score 0% on
+`AADHAAR_MASKED` (partially masked numbers such as XXXX XXXX 1234).
+`IN_VEHICLE_REGISTRATION` manages only 43% against their hyphenated
+formats.
+
+**Worth borrowing from MaskFlow's approach:**
+
+- *Hard negatives in the test set.* The single biggest methodological
+  gap on our side. Our ground truth cannot detect over-redaction at all.
+- *An evidence layer.* MaskFlow records a metadata-only, verifiable trace
+  of what was masked, never the values. Our `summary.json` lists types
+  and counts but offers no way to prove a run redacted what it claims.
+- *Typed, numbered placeholders* (`<AADHAAR_1>`). Not directly applicable
+  to black boxes, but the numbering makes an audit trail legible.
+
+**Not applicable:** MaskFlow is a text/LLM-gateway masker. It has no OCR,
+no faces, no QR codes — the entire failure surface this project spends
+its time on does not exist there.
