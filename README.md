@@ -22,6 +22,14 @@ redacted output to Claude and asking what remains readable.
 All five leaks are **partial coverage**: the entity was found, the box did
 not cover all of it.
 
+**That number does not generalise, and we can prove it.** On 20 synthetic
+Indian cheques from an unrelated dataset, only 2 of 60 PII regions are
+fully covered — mean coverage 17% for account numbers, 28% for payee
+names. Cheques carry handwriting and signatures throughout, and the
+handwritten payee name is unreadable to both OCR engines. 93.5% describes
+printed forms and ID cards, half of which this project generated; see
+[the cheque benchmark](#benchmarks).
+
 ## Setup
 
 Requires macOS with [Homebrew](https://brew.sh).
@@ -95,7 +103,7 @@ sanitize (EXIF orientation applied, GPS + thumbnail stripped)
    ├─ thread ── OCR: rgb ───────┐
    ├─ thread ── OCR: greyscale  ┼─→ union of boxes ─→ merge stacked blocks
    ├─ thread ── OCR: clahe+otsu ┤              │
-   └─ thread ── faces / QR / barcode ──────────┘
+   └─ thread ── faces / signatures / QR / barcode ──┘
                                               │
                             draw on the original colour image
                                               │
@@ -185,6 +193,7 @@ deliberately *not* the obvious choice.
 | block merging | Redacting each detected box is simpler | A wrapped address is detected line by line and often only partly; the enclosing rectangle covers what was never detected at all |
 | visual PII **on** | Presidio only redacts OCR'd text | An intact Aadhaar QR still encodes name, DOB and address |
 | YuNet over Haar | Haar needs no model file | Haar reported 3 faces where 2 exist |
+| signatures anchored on a label | Pure shape analysis needs no OCR | Ranking components by sprawl put the true signature at rank 3-8, so the top few would black out unrelated ink. Anchoring on a cue word gives 13/20 with zero false positives |
 | `detect()`, never `detectAndDecode()` | The decode APIs look more capable | Decode-gated APIs return **no box** for a code they cannot read — exactly the codes that most need covering |
 | `--style solid` | Blur looks less brutal | Only solid destroys the information; blur and pixelation are partially reversible |
 | Aadhaar fallback **on** | Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, so one OCR digit error leaves a real Aadhaar fully visible |
@@ -225,6 +234,27 @@ Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
 models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
 they share a model lineage was wrong.
 
+**Cheques** — 20 synthetic Indian cheques
+([`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images),
+Apache-2.0) with human-authored field boxes. The first test data here that
+nobody on this project labelled:
+
+```bash
+python cheque_benchmark.py                      # fetch 20
+python evaluate_redactor.py --input cheque_images --run-name cheques
+python cheque_benchmark.py --score runs/cheques
+```
+
+| field | mean covered |
+|---|---:|
+| signature | 51% |
+| payee name | 28% |
+| account number | 17% |
+
+Because these boxes are trustworthy, this is the one place *coverage* is a
+meaningful metric — the same measurement computed from vision-generated
+boxes was removed for being off by about a text row.
+
 **Recognizers**, against
 [IndiaPII-Bench](https://huggingface.co/datasets/maskflow-ai/indiapii-bench)
 (2,000 synthetic documents, CC-BY-4.0) — plain text, so it isolates
@@ -240,12 +270,32 @@ Only 3% of its PII-shaped decoys are flagged as the type they mimic — and
 all of those are checksum-invalid Aadhaars, which this tool flags *by
 design*: correct for images, wrong for text.
 
+And against
+[`maskara-indian-pii-200k`](https://huggingface.co/datasets/somukandula/maskara-indian-pii-200k)
+(MIT), which adds hard negatives and an **`ocr` domain of deliberately
+corrupted text**:
+
+```bash
+python benchmark_maskara.py
+```
+
+75.6% overall — and the `ocr` domain scores **93%, the highest of any
+domain**, which is the first direct evidence for the OCR-tolerant Aadhaar
+fallback. It exposes a spacing gap: PAN at 70% and vehicle registration at
+22%, both failing on the spaced forms (`AGNVL 0925 B`, `AP 51 NK 6401`)
+that people write and OCR produces.
+
 ## Current limitations
 
 - **Partial coverage** — all five remaining leaks.
 - **OCR errors defeat exact-pattern entities.** An email read as
   `oriyasharma@grmal ON` never matches `EMAIL_ADDRESS`.
-- **Handwriting** goes unread by both engines unless `--medical-ner` is on.
+- **Handwriting** goes unread by both engines. On cheques this is the
+  *dominant* failure, not an edge case — the payee name is handwritten on
+  every one.
+- **Signatures** are found only when a printed cue word sits nearby;
+  13/20 on cheques.
+- **Spaced ID formats** — `AGNVL 0925 B`, `AP 51 NK 6401` — are missed.
 - **English only.** Names and addresses in Devanagari or Kannada — present
   on real Aadhaar cards and utility bills — are never detected.
 - **Cropped values** are missed: a PAN visible only as `DE1234F` does not
@@ -290,7 +340,9 @@ vision_score.py             ask Claude what survived
 annotate_inputs.py          audit the ground truth
 annotate_leaks.py           draw failures onto the images
 benchmark_ocr.py            OCR configs, recall vs cost
-benchmark_indiapii.py       recognizers vs IndiaPII-Bench
+benchmark_indiapii.py       recognizers vs IndiaPII-Bench (CC-BY-4.0)
+benchmark_maskara.py        recognizers vs maskara-indian-pii-200k (MIT)
+cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 test_metadata_stripping.py  regression guard for EXIF stripping
 setup.sh                    one-time environment setup
 DECISIONS.md                why everything is the way it is
