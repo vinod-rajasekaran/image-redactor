@@ -41,7 +41,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from ocr_backends import OCR_BACKENDS
+from ocr_backends import OCR_BACKENDS, TESSERACT_PSM_MODES
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 
@@ -190,6 +190,7 @@ def build_engines(
     logger: logging.Logger,
     ocr_tolerant_aadhaar: bool = True,
     ocr_backend: str = "tesseract",
+    psm: int | None = None,
 ):
     """Construct Presidio's image analyzer + redactor engines.
 
@@ -223,7 +224,7 @@ def build_engines(
     analyzer_engine = AnalyzerEngine(registry=registry)
     logger.info("Loading OCR backend: [bold]%s[/bold]", ocr_backend)
     image_analyzer = ImageAnalyzerEngine(
-        analyzer_engine=analyzer_engine, ocr=build_ocr(ocr_backend)
+        analyzer_engine=analyzer_engine, ocr=build_ocr(ocr_backend, psm)
     )
     redactor = ImageRedactorEngine(image_analyzer_engine=image_analyzer)
     return image_analyzer, redactor
@@ -444,6 +445,16 @@ def main() -> None:
         help="OCR backend (default: tesseract)",
     )
     parser.add_argument(
+        "--psm",
+        type=int,
+        default=None,
+        choices=list(TESSERACT_PSM_MODES),
+        help=(
+            "Tesseract page-segmentation mode (default: Tesseract's own, 3). "
+            "Ignored by other backends"
+        ),
+    )
+    parser.add_argument(
         "--no-visual-pii",
         dest="visual_pii",
         action="store_false",
@@ -550,6 +561,7 @@ def main() -> None:
         "input_dir": str(input_dir),
         "image_count": len(image_paths),
         "ocr_backend": args.ocr,
+        "psm": args.psm,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -568,6 +580,7 @@ def main() -> None:
         logger,
         ocr_tolerant_aadhaar=not args.strict_aadhaar,
         ocr_backend=args.ocr,
+        psm=args.psm,
     )
 
     analyzer_kwargs: dict = {"score_threshold": args.threshold}

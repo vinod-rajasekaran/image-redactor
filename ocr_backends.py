@@ -10,7 +10,22 @@ import numpy as np
 from presidio_image_redactor import TesseractOCR
 from presidio_image_redactor.ocr import OCR
 
-OCR_BACKENDS = ("tesseract", "paddle")
+OCR_BACKENDS = ("tesseract", "paddle", "rapidocr")
+
+# Tesseract page-segmentation modes worth trying on documents. The default
+# is 3 (fully automatic); the others assume progressively more about layout.
+TESSERACT_PSM_MODES = (3, 4, 6, 11, 12)
+
+
+class TesseractPSMOCR(TesseractOCR):
+    """Tesseract pinned to a specific page-segmentation mode."""
+
+    def __init__(self, psm: int = 3) -> None:
+        self.psm = psm
+
+    def perform_ocr(self, image: object, **kwargs) -> dict:
+        kwargs.setdefault("config", f"--psm {self.psm}")
+        return super().perform_ocr(image, **kwargs)
 
 EMPTY_RESULT: dict[str, list] = {
     "text": [],
@@ -140,9 +155,60 @@ class PaddleOCREngine(OCR):
         return result
 
 
-def build_ocr(backend: str) -> OCR:
+class RapidOCREngine(OCR):
+    """RapidOCR adapter — PaddleOCR's models on the ONNXRuntime runtime.
+
+    Same model lineage as PaddleOCR, so accuracy should track it closely,
+    without the paddlepaddle runtime. Like Paddle it returns line-level
+    boxes, so the same whole-line rule applies (see _split_line_into_words).
+    """
+
+    def __init__(self) -> None:
+        from rapidocr_onnxruntime import RapidOCR as _RapidOCR
+
+        self._ocr = _RapidOCR()
+
+    def perform_ocr(self, image: object, **kwargs) -> dict:
+        from PIL import Image as PILImage
+
+        if isinstance(image, PILImage.Image):
+            array = np.array(image.convert("RGB"))
+        elif isinstance(image, str):
+            array = np.array(PILImage.open(image).convert("RGB"))
+        else:
+            array = np.asarray(image)
+
+        raw, _elapsed = self._ocr(array)
+        result = _blank_result()
+        for entry in raw or []:
+            poly, text, score = entry[0], entry[1], entry[2]
+            if not text or not str(text).strip():
+                continue
+            pts = np.asarray(poly, dtype=float).reshape(-1, 2)
+            x, y = int(pts[:, 0].min()), int(pts[:, 1].min())
+            w = int(pts[:, 0].max() - pts[:, 0].min())
+            h = int(pts[:, 1].max() - pts[:, 1].min())
+            for word, wx, wy, ww, wh in _split_line_into_words(str(text), x, y, w, h):
+                result["text"].append(word)
+                result["left"].append(wx)
+                result["top"].append(wy)
+                result["width"].append(ww)
+                result["height"].append(wh)
+                result["conf"].append(float(score) * 100.0)
+                result["level"].append(5)
+                result["page_num"].append(1)
+                result["block_num"].append(1)
+                result["par_num"].append(1)
+                result["line_num"].append(1)
+                result["word_num"].append(len(result["text"]))
+        return result
+
+
+def build_ocr(backend: str, psm: int | None = None) -> OCR:
     if backend == "tesseract":
-        return TesseractOCR()
+        return TesseractPSMOCR(psm) if psm else TesseractOCR()
     if backend == "paddle":
         return PaddleOCREngine()
+    if backend == "rapidocr":
+        return RapidOCREngine()
     raise ValueError(f"Unknown OCR backend: {backend!r}. Expected one of {OCR_BACKENDS}")
