@@ -564,13 +564,17 @@ visible, 11 unverifiable.
 **What the category breakdown exposes:** recall is not uniform, and the
 single number hid a category with *zero* coverage.
 
-| category | floor |
-|---|---:|
-| identifier | 84% |
-| health | 83% |
-| quasi_identifier | 67% |
-| contact | 62% |
-| financial | **0%** |
+| category | tesseract | paddle |
+|---|---:|---:|
+| identifier | 84% | 88% |
+| health | 83% | 100% |
+| quasi_identifier | 67% | 78% |
+| contact | 62% | 72% |
+| financial | **0%** | **0%** |
+
+Paddle with the same improvements scores 75.4% – 84.6%. Financial is 0%
+on *both*, which isolates it as a recognizer gap rather than an OCR one —
+the only category where a better reader changes nothing.
 
 Every transaction line and balance on a bank statement survives,
 including `UPI - Apollo Pharmacy`, which discloses healthcare usage from

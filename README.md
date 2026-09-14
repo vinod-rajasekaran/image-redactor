@@ -266,24 +266,30 @@ of what is confirmed redacted, and a ceiling assuming every unverifiable
 item was also redacted. See "Measuring leakage" for why both numbers are
 needed.
 
-Against the current vision-labelled ground truth (130 items), Tesseract
-with every improvement scores **67.7% – 76.2%**: 88 confirmed redacted,
-31 confirmed still visible, 11 unverifiable.
+Against the vision-labelled ground truth (130 items), both engines with
+every improvement enabled:
+
+| engine | recall | confirmed redacted | confirmed visible | unverifiable |
+|---|---|---:|---:|---:|
+| tesseract | 67.7% – 76.2% | 88 | 31 | 11 |
+| **paddle** | **75.4% – 84.6%** | 98 | 20 | 12 |
 
 Recall varies enormously by category, which a single number hides:
 
-| category | items | confirmed redacted | floor |
+| category | items | tesseract | paddle |
 |---|---:|---:|---:|
-| identifier | 50 | 42 | 84% |
-| health | 12 | 10 | 83% |
-| quasi_identifier | 27 | 18 | 67% |
-| contact | 29 | 18 | 62% |
-| **financial** | **12** | **0** | **0%** |
+| identifier | 50 | 84% | 88% |
+| health | 12 | 83% | **100%** |
+| quasi_identifier | 27 | 67% | 78% |
+| contact | 29 | 62% | 72% |
+| **financial** | **12** | **0%** | **0%** |
 
-**Financial data is entirely unredacted.** Every transaction line and
-balance on a bank statement survives, including `UPI - Apollo Pharmacy`,
-which discloses healthcare usage. Presidio has no recognizer for
-transaction descriptions or amounts, and none was added.
+**Financial data is entirely unredacted, and better OCR does not help.**
+Both engines score 0 of 12, which proves this is a missing-recognizer
+problem rather than a reading problem. Every transaction line and balance
+on a bank statement survives, including `UPI - Apollo Pharmacy`, which
+discloses healthcare usage from financial data. Presidio has no
+recognizer for transaction descriptions or amounts, and none was added.
 
 Of the 16 still visible in the best configuration, **11 are PII that OCR
 never read at all** — chiefly a photographed laptop screen whose name,
