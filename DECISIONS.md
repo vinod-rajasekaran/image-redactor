@@ -1294,3 +1294,15 @@ would have published figures no image in the repo produces.
 **`cheque_benchmark.py --limit N` now writes JPEG too**, so a refetch
 cannot silently rebuild a PNG corpus that scores differently from the
 committed one.
+
+**Addendum — the 42MB of PNG blobs stay in history.** Converting the
+cheques did not shrink `.git`; it grew it, 47MB to 60MB, because the
+PNGs remain in the commit that added them. A `filter-branch` over the
+unpushed range would remove them, and was deliberately declined: linear,
+unrewritten history is worth more than 42MB.
+
+**Do not revisit this after the branch is pushed.** The rewrite is cheap
+and safe only while nothing downstream references those commits. Once
+pushed it is a forced update that breaks every clone, to reclaim space
+that a single `git clone --depth 1` already avoids. The working tree is
+14MB either way.
