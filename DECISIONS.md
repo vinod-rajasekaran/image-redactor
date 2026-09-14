@@ -1165,9 +1165,31 @@ but deterministic and free of a model call, and is only trustworthy where
 the boxes were computed at render time or authored by a person.
 
 `datasets/README.md` records what each corpus is, its licence and its
-provenance, and is the only tracked file under the tree. Everything else
-is gitignored: the documents corpus holds real photographs, and an
-annotation file states exactly where the PII sits.
+provenance, and each `annotations.json` repeats it in `_meta` where a
+script can read it.
+
+**Correction, made the same day.** The tree was first committed with
+`datasets/*` gitignored wholesale, on the stated reasoning that the
+documents corpus held real photographs. It does not. Images 11–20 were
+generated with an OpenAI image model and only *look* photographed —
+perspective, glare, low contrast are what the generator was asked for,
+which is also why they are the hardest images here. The pack is Claude-
+generated, and the cheques are publisher-declared synthetic under
+Apache-2.0. Nothing in the tree needed hiding, and hiding it cost the one
+thing a benchmark is for: a clone that reproduces the numbers.
+
+`documents/` and `pack/` are now tracked — 3.6MB, and the headline
+figures reproduce with no downloads. `cheques/images` (87MB) and `text/`
+(93MB) stay out for size alone, both re-fetchable in one command, with
+the cheque annotations and provenance still tracked so the Apache-2.0
+attribution lives in the repo rather than in a download. `runs/` and
+`input_annotations.json` remain ignored on the original reasoning, which
+holds for them: they describe whatever images a *user* fed the tool.
+
+**The lesson worth keeping:** "may contain PII" was an assumption I never
+checked, and it propagated into three files as though it were a finding.
+A provenance claim is a fact about where bytes came from — it gets
+recorded when the bytes arrive, or it is not knowable later.
 
 **Verified as a move, not a rewrite:** documents 72 redacted / 5 visible,
 cheques acno 17% / name 28% / sign 51%, pack 90% with 47/87 fully covered

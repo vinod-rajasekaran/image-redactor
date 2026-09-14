@@ -1,0 +1,698 @@
+{
+  "_meta": {
+    "description": "20 synthetic Indian documents: 10 rendered by generate_test_images.py, 10 image-model generations (OpenAI) supplied as a collage and split into individual pages.",
+    "source": "generate_test_images.py (01-10); OpenAI image generation (11-20)",
+    "licence": "fully synthetic — every name, number and address is fabricated; no real person or real document",
+    "annotation": "text (legibility scoring), hand-labelled then vision-audited",
+    "note": "11-20 imitate photographed pages — perspective, glare, low contrast — which is why they are the hardest images here. That is rendered appearance, not a camera."
+  },
+  "01_aadhaar_card.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Rajesh Kumar Sharma",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "14/03/1985",
+        "expected_type": "DATE_TIME",
+        "field": "DOB",
+        "tier": "core"
+      },
+      {
+        "text": "4521 8734 9015",
+        "expected_type": "IN_AADHAAR",
+        "field": "Aadhaar No.",
+        "tier": "core"
+      },
+      {
+        "text": "12, MG Road, Andheri West,",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      },
+      {
+        "text": "+91 98765 43210",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Mobile",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "02_pan_card.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Priya Venkataraman",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "Suresh Venkataraman",
+        "expected_type": "PERSON",
+        "field": "Father's Name",
+        "tier": "core"
+      },
+      {
+        "text": "22/07/1990",
+        "expected_type": "DATE_TIME",
+        "field": "DOB",
+        "tier": "core"
+      },
+      {
+        "text": "BXKPP4521Q",
+        "expected_type": "IN_PAN",
+        "field": "PAN",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "03_job_application.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Ananya Reddy",
+        "expected_type": "PERSON",
+        "field": "Applicant Name",
+        "tier": "core"
+      },
+      {
+        "text": "ananya.reddy1990@gmail.com",
+        "expected_type": "EMAIL_ADDRESS",
+        "field": "Email",
+        "tier": "core"
+      },
+      {
+        "text": "+91 90123 45678",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Phone",
+        "tier": "core"
+      },
+      {
+        "text": "45, Jubilee Hills, Hyderabad,",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      },
+      {
+        "text": "3412 6690 8820",
+        "expected_type": "IN_AADHAAR",
+        "field": "Aadhaar Ref.",
+        "tier": "core"
+      },
+      {
+        "text": "P4521876",
+        "expected_type": "IN_PASSPORT",
+        "field": "Passport No.",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "04_hospital_admission_report.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Mohammed Irfan Ali",
+        "expected_type": "PERSON",
+        "field": "Patient Name",
+        "tier": "core"
+      },
+      {
+        "text": "78, Park Street, Kolkata - 700016",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      },
+      {
+        "text": "+91 91234 56789",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Phone",
+        "tier": "core"
+      },
+      {
+        "text": "4521 8734 9012",
+        "expected_type": "IN_AADHAAR",
+        "field": "Aadhaar No.",
+        "tier": "core"
+      },
+      {
+        "text": "Type 2 Diabetes Mellitus, Hypertension",
+        "expected_type": null,
+        "field": "Diagnosis",
+        "tier": "sensitive"
+      },
+      {
+        "text": "Dr. Kavitha Nair",
+        "expected_type": "PERSON",
+        "field": "Admitting Doctor",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "05_doctor_prescription.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Sunita Devi Yadav",
+        "expected_type": "PERSON",
+        "field": "Patient Name",
+        "tier": "core"
+      },
+      {
+        "text": "MH/MED/2011/45892",
+        "expected_type": "IN_MEDICAL_REG",
+        "field": "Doctor Reg. No.",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "06_bank_passbook.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Vikram Singh Chauhan",
+        "expected_type": "PERSON",
+        "field": "Account Holder",
+        "tier": "core"
+      },
+      {
+        "text": "0234 5678 9012 345",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "field": "Account No.",
+        "tier": "core"
+      },
+      {
+        "text": "+91 99887 66554",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Phone",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "07_driving_license.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Arjun Nair",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "KA05 20230012345",
+        "expected_type": "IN_DRIVING_LICENCE",
+        "field": "DL No.",
+        "tier": "core"
+      },
+      {
+        "text": "05/11/1995",
+        "expected_type": "DATE_TIME",
+        "field": "DOB",
+        "tier": "core"
+      },
+      {
+        "text": "22, Indiranagar 100ft Road,",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      },
+      {
+        "text": "KA05MJ4521",
+        "expected_type": "IN_VEHICLE_REGISTRATION",
+        "field": "Vehicle Registration",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "08_voter_id.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Lakshmi Narayanan",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "Ramaswamy Narayanan",
+        "expected_type": "PERSON",
+        "field": "Father's Name",
+        "tier": "core"
+      },
+      {
+        "text": "TNV2345678",
+        "expected_type": "IN_VOTER",
+        "field": "EPIC No.",
+        "tier": "core"
+      },
+      {
+        "text": "9, Anna Nagar East, Chennai - 600102",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "09_insurance_claim.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "NHI/2024/778812",
+        "expected_type": "IN_POLICY_NUMBER",
+        "field": "Policy No.",
+        "tier": "core"
+      },
+      {
+        "text": "Farhan Ahmed Khan",
+        "expected_type": "PERSON",
+        "field": "Claimant Name",
+        "tier": "core"
+      },
+      {
+        "text": "+91 93456 78901",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Phone",
+        "tier": "core"
+      },
+      {
+        "text": "Fractured left femur - road accident",
+        "expected_type": null,
+        "field": "Diagnosis",
+        "tier": "sensitive"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "10_rental_agreement.png": {
+    "source": "synthetic",
+    "labelled_by": "generator",
+    "pii": [
+      {
+        "text": "Ramesh Chandra Gupta",
+        "expected_type": "PERSON",
+        "field": "Landlord Name",
+        "tier": "core"
+      },
+      {
+        "text": "AHGPG7734L",
+        "expected_type": "IN_PAN",
+        "field": "Landlord PAN",
+        "tier": "core"
+      },
+      {
+        "text": "Deepika Iyer",
+        "expected_type": "PERSON",
+        "field": "Tenant Name",
+        "tier": "core"
+      },
+      {
+        "text": "5678 1234 9087",
+        "expected_type": "IN_AADHAAR",
+        "field": "Tenant Aadhaar",
+        "tier": "core"
+      },
+      {
+        "text": "Flat 302, Green Valley Apts,",
+        "expected_type": "LOCATION",
+        "field": "Property Address",
+        "tier": "core"
+      },
+      {
+        "text": "+91 97865 43210",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Tenant Phone",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "11_aadhaar_card.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "14/08/1987",
+        "expected_type": "DATE_TIME",
+        "field": "DOB",
+        "tier": "core"
+      },
+      {
+        "text": "4587 6321 9876",
+        "expected_type": "IN_AADHAAR",
+        "field": "Aadhaar No.",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Aadhaar number is checksum-INVALID; stock Presidio misses it."
+  },
+  "12_pan_card.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "ABCDE1234F",
+        "expected_type": "IN_PAN",
+        "field": "PAN",
+        "tier": "core"
+      },
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Name",
+        "tier": "core"
+      },
+      {
+        "text": "Rajesh Sharma",
+        "expected_type": "PERSON",
+        "field": "Father's Name",
+        "tier": "core"
+      },
+      {
+        "text": "14/08/1987",
+        "expected_type": "DATE_TIME",
+        "field": "DOB",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "PAN 4th char 'D' is not a valid holder-type code, scores 0.45."
+  },
+  "13_water_bill.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Customer Name",
+        "tier": "core"
+      },
+      {
+        "text": "1234567890",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "field": "Account No.",
+        "tier": "core"
+      },
+      {
+        "text": "12, 3rd Cross Indiranagar Bengaluru - 560038",
+        "expected_type": "LOCATION",
+        "field": "Service Address",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 1
+    }
+  },
+  "14_passport.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Closed passport cover. Any detection here is a false positive."
+  },
+  "15_job_application_form.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Full Name",
+        "tier": "core"
+      },
+      {
+        "text": "14/08/1987",
+        "expected_type": "DATE_TIME",
+        "field": "Date of Birth",
+        "tier": "core"
+      },
+      {
+        "text": "12, 3rd Cross Indiranagar Bengaluru - 560038",
+        "expected_type": "LOCATION",
+        "field": "Address",
+        "tier": "core"
+      },
+      {
+        "text": "+91 98765 43210",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Phone No.",
+        "tier": "core"
+      },
+      {
+        "text": "priya.sharma@gmail.com",
+        "expected_type": "EMAIL_ADDRESS",
+        "field": "Email",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
+  },
+  "16_lab_test_report.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Patient Name",
+        "tier": "core"
+      },
+      {
+        "text": "AH12345678",
+        "expected_type": "IN_PATIENT_ID",
+        "field": "UHID",
+        "tier": "core"
+      },
+      {
+        "text": "Dr. Anitha Reddy",
+        "expected_type": "PERSON",
+        "field": "Consultant Pathologist",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Lab values excluded: a measurement identifies nobody."
+  },
+  "17_doctor_prescription.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Patient Name",
+        "tier": "core"
+      },
+      {
+        "text": "Dr. R. Venkat",
+        "expected_type": "PERSON",
+        "field": "Consultant Physician",
+        "tier": "core"
+      },
+      {
+        "text": "Metformin 500 mg",
+        "expected_type": null,
+        "field": "Medication",
+        "tier": "sensitive"
+      },
+      {
+        "text": "Atorvastatin 10 mg",
+        "expected_type": null,
+        "field": "Medication",
+        "tier": "sensitive"
+      },
+      {
+        "text": "Vitamin D3 60K",
+        "expected_type": null,
+        "field": "Medication",
+        "tier": "sensitive"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Handwritten body; neither OCR engine reads it reliably."
+  },
+  "18_bank_statement.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "50100123456789",
+        "expected_type": "IN_BANK_ACCOUNT",
+        "field": "Account No.",
+        "tier": "core"
+      },
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Customer Name",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Transactions, balances and the bank helpline excluded: amounts and merchants identify nobody on their own."
+  },
+  "19_loan_application.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Full Name",
+        "tier": "core"
+      },
+      {
+        "text": "14/08/1987",
+        "expected_type": "DATE_TIME",
+        "field": "Date of Birth",
+        "tier": "core"
+      },
+      {
+        "text": "+91 98765 43210",
+        "expected_type": "PHONE_NUMBER",
+        "field": "Mobile Number",
+        "tier": "core"
+      },
+      {
+        "text": "priya.sharma@gmail.com",
+        "expected_type": "EMAIL_ADDRESS",
+        "field": "Email Address",
+        "tier": "core"
+      },
+      {
+        "text": "12, 3rd Cross, Indiranagar Bengaluru - 560038",
+        "expected_type": "LOCATION",
+        "field": "Residential Address",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Photo of a laptop screen; Tesseract reads almost nothing."
+  },
+  "20_flight_booking.png": {
+    "source": "real",
+    "labelled_by": "vision",
+    "pii": [
+      {
+        "text": "6E3F7K",
+        "expected_type": "IN_PNR",
+        "field": "PNR",
+        "tier": "core"
+      },
+      {
+        "text": "Priya Sharma",
+        "expected_type": "PERSON",
+        "field": "Passenger Name",
+        "tier": "core"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Route, flight number, times and seat excluded as non-identifying."
+  }
+}

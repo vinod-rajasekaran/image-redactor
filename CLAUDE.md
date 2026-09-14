@@ -80,11 +80,15 @@ documents), five confirmed leaks, all partial-coverage failures.
   shared Claude client.
 
 `datasets/` holds every validation corpus — images and annotations
-together, one schema, loaded through `redactor.datasets.load(name)`. All
-of it is gitignored except `datasets/README.md`: `documents/` contains
-real photographs, and an annotation file says exactly where the PII sits.
-`runs/` and `input_annotations.json` are gitignored for the same reason.
-Never commit anything from them, not even "sample output".
+together, one schema, loaded through `redactor.datasets.load(name)`.
+**Every corpus is synthetic**, and each one's `_meta` block states its
+source and licence; keep that true of anything added. `documents/` and
+`pack/` are committed. Excluded for size only, not secrecy:
+`cheques/images` (87MB, Apache-2.0, `cheque_benchmark.py` re-fetches it)
+and `text/` (93MB of third-party parquets).
+
+`runs/` and `input_annotations.json` stay gitignored — those describe
+whatever a *user* fed the tool, which is not synthetic and not ours.
 
 ## Environment
 

@@ -69,10 +69,13 @@ Drop your own images into `input_images/` and run `evaluate_redactor.py`;
 the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
 Validation corpora live under `datasets/` — images and annotations
-together, one schema, one loader. See
-[datasets/README.md](datasets/README.md). All of it is gitignored: the
-documents corpus holds real photographs and the annotations say exactly
-where the PII sits.
+together, one schema, one loader. Every image is synthetic: no real
+person, document or account appears anywhere in this repo. `documents/`
+and `pack/` are committed, so the benchmark is reproducible from a clone
+alone. `cheques/` keeps its annotations and provenance tracked but fetches
+its 87MB of Apache-2.0 images from the source, and `text/` is
+download-on-demand. Licences and provenance per corpus:
+[datasets/README.md](datasets/README.md).
 
 ### Options
 

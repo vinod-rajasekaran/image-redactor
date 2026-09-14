@@ -4,12 +4,42 @@ Every image this project validates against, with its annotations beside
 it. One schema, one loader (`redactor/datasets.py`), so adding a corpus
 does not mean editing every script.
 
-| corpus | n | annotation | licence / provenance |
-|---|---:|---|---|
-| `documents/` | 20 | text | 10 synthetic documents generated here + 10 photographs, hand-labelled. **May contain real PII.** |
-| `cheques/` | 20 | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images) — Apache-2.0, fully synthetic |
-| `pack/` | 20 | box | `generate_synthetic_indian_pii_images.py` — fully synthetic, 8 document types |
-| `text/` | 3 files | spans | Text-only benchmarks: IndiaPII-Bench (CC-BY-4.0), maskara-indian-pii-200k (MIT), the cheque parquet |
+## Everything here is synthetic
+
+No real person, document, account or photograph appears in any corpus.
+Every name, number and address was fabricated by a generator — one of
+ours, one of the publishers', or an image model. That is stated per
+corpus below and repeated in each `annotations.json` `_meta` block, which
+is where a script reads it from.
+
+| corpus | n | tracked | annotation | provenance | licence |
+|---|---:|---|---|---|---|
+| `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic |
+| `pack/` | 20 | yes | box | `generate_synthetic_indian_pii_images.py` — pack authored with Claude, generated locally | fully synthetic |
+| `cheques/` | 20 | annotations only | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
+| `text/` | 3 files | no | spans | IndiaPII-Bench; maskara-indian-pii-200k; the cheque parquet | CC-BY-4.0; MIT; Apache-2.0 |
+
+Images 11–20 *imitate* photographed pages — perspective, glare, low
+contrast — and the notes elsewhere call them photographs for that reason.
+That is rendered appearance, not a camera: they are the hardest images
+here precisely because a generator was asked to make them look shot in
+poor light.
+
+## What is not committed, and why
+
+Only size, in both cases:
+
+- **`cheques/images`** — 87MB of 2365×1065 PNGs. The annotations and the
+  `_meta` provenance stay tracked; `python cheque_benchmark.py` re-fetches
+  the images from HuggingFace in one command. Apache-2.0 asks for
+  attribution on redistribution, and pointing at the source is cleaner
+  than vendoring 87MB into git history.
+- **`text/`** — 93MB of third-party parquets, fetched by
+  `benchmark_indiapii.py` and `benchmark_maskara.py` per their docstrings.
+
+`documents/` and `pack/` are 3.6MB together and are committed, so the
+headline numbers in `DECISIONS.md` are reproducible from a clone with no
+downloads at all.
 
 ## Why two annotation kinds
 
@@ -43,9 +73,10 @@ A corpus that knows both should record both.
 `text` and `box` are each optional; at least one is always present.
 `expected_type` is `null` where no Presidio recognizer covers the field.
 
-## Nothing here is committed
+## Adding a corpus
 
-The images and annotations are gitignored. `documents/` holds real
-photographs, and annotation files describe exactly where the PII is —
-publishing either would defeat the point of the project. Regenerate with
-`generate_test_images.py`, `cheque_benchmark.py` and the pack generator.
+Write `_meta` with a `source` and a `licence` before anything else. A
+corpus whose provenance cannot be stated in one line does not belong
+here, and one that is not synthetic does not belong here at all — real
+document images are exactly what this tool exists to protect, and its
+test set is a poor place to keep them.

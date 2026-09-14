@@ -202,9 +202,13 @@ cython_debug/
 
 # Cheque benchmark working data
 
-# Validation corpora: images and annotations. Never committed — documents/
-# holds real photographs, and the annotations say exactly where the PII is.
-# datasets/README.md is tracked; everything under it is not.
-datasets/*
-!datasets/README.md
+# Validation corpora. documents/ and pack/ are fully synthetic and small,
+# so they are committed — the benchmark is reproducible by anyone who
+# clones this. Two exclusions, neither about PII:
+#   cheques/images — 87MB, Apache-2.0, one command to re-fetch from the
+#                    source; the annotations and provenance stay tracked
+#   text/          — 93MB of third-party benchmark parquets, download-on-demand
+# See datasets/README.md for licence and provenance per corpus.
+datasets/cheques/images/
+datasets/text/
 input_annotations.json
