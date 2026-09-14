@@ -727,3 +727,50 @@ formats.
 **Not applicable:** MaskFlow is a text/LLM-gateway masker. It has no OCR,
 no faces, no QR codes — the entire failure surface this project spends
 its time on does not exist there.
+
+---
+
+## 2026-09-14 — Merge stacked same-entity boxes into blocks
+
+**Status:** Active (`--no-merge-blocks` disables)
+
+Boxes of one entity type that sit within ~1.6 line-heights of each other
+and overlap horizontally are replaced by their enclosing rectangle.
+
+**Why:** a wrapped address is detected line by line and often only
+partly. On the sample driving licence the second line matched
+"Bengaluru, Karnataka" while the first matched only a 61px fragment at
+its right end, leaving "22, Indiranagar 100ft" legible. Redacting each
+box separately can never fix that, because the missed words were never
+detected. The enclosing rectangle of the cluster covers them, since the
+second line's horizontal extent reaches past where the first line failed.
+
+**Result: the last confirmed leak is gone.** Tesseract with everything
+enabled scores **88.3% – 100.0%** of 77 items: 68 confirmed redacted,
+**0 confirmed visible**, 9 unverifiable. Cost is +0.7 percentage points
+of blacked-out area.
+
+**Two bugs found while building it, both silent:**
+
+- Clustering in one pass over reading order stranded the leftmost
+  fragment, because the cluster only grew wide enough to reach it *after*
+  a later box joined. Merging now repeats until nothing changes.
+- The line-gap threshold used a median height computed across *all*
+  entity types. The address lines sat 21px apart while that global median
+  was 17, so they failed to merge by four pixels — and an isolated test
+  had passed only because its median happened to be 21. Heights are now
+  per label, which is the only meaningful way to measure them.
+
+**Rejected alternative:** a YOLO layout model
+(`arnabdhar/YOLOv8-nano-aadhar-card`) located the same address block
+correctly, including on the laptop-screen form our OCR cannot read. It
+was not adopted: its weights are Apache-2.0 but `ultralytics`, the only
+practical way to run them, is **AGPL-3.0** — network copyleft, and the
+only non-permissive dependency this project would have. Its non-ADDRESS
+classes were also unusable outside Aadhaar cards, labelling a statement
+period and "UPI - Swiggy" as AADHAR_NUMBER. Solving the problem
+ourselves cost twenty lines and no licence exposure.
+
+**Known, pre-existing and unrelated:** several documents black out the
+whole label column. It is present with merging disabled, so it is not
+caused by this change; it has not been diagnosed.

@@ -269,12 +269,18 @@ def process_image(
     use_wechat: bool = False,
     variant_union: bool = True,
     style: str = "solid",
+    merge_blocks: bool = True,
 ) -> ImageResult:
     from PIL import Image
 
     from image_hygiene import sanitize_for_processing, save_clean
     from ocr_backends import build_ocr_variants
-    from visual_redaction import VisualRegion, detect_visual_pii, redact_regions
+    from visual_redaction import (
+        VisualRegion,
+        detect_visual_pii,
+        merge_same_type_blocks,
+        redact_regions,
+    )
 
     analyzer_kwargs = analyzer_kwargs or {}
     start = time.monotonic()
@@ -327,7 +333,7 @@ def process_image(
     # Union the variants. A box found by any variant counts; duplicates
     # cost nothing, since overlapping black rectangles are identical.
     seen: set[tuple] = set()
-    text_boxes: list[VisualRegion] = []
+    raw_boxes: list[tuple] = []
     entities: dict[str, int] = {}
     scores: list[float] = []
     for results in per_variant:
@@ -344,7 +350,14 @@ def process_image(
             seen.add(box)
             entities[r.entity_type] = entities.get(r.entity_type, 0) + 1
             scores.append(r.score)
-            text_boxes.append(VisualRegion("text", *box[1:]))
+            raw_boxes.append(box)
+
+    # A wrapped address is detected line by line and often only partly, so
+    # redacting each box alone can never cover the words that were never
+    # detected. The enclosing rectangle of a stacked cluster does.
+    if merge_blocks:
+        raw_boxes = merge_same_type_blocks(raw_boxes)
+    text_boxes = [VisualRegion("text", *b[1:]) for b in raw_boxes]
 
     visual_counts: dict[str, int] = {}
     for r in regions:
@@ -510,6 +523,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--no-merge-blocks",
+        dest="merge_blocks",
+        action="store_false",
+        help=(
+            "Do not merge vertically-stacked boxes of one entity type into "
+            "their enclosing rectangle. On by default: a wrapped address is "
+            "detected line by line and often only partly, leaving the "
+            "undetected part of it legible"
+        ),
+    )
+    parser.add_argument(
         "--style",
         default="solid",
         choices=list(REDACTION_STYLES),
@@ -651,6 +675,7 @@ def main() -> None:
         "reading_order": args.reading_order,
         "variant_union": args.variant_union,
         "style": args.style,
+        "merge_blocks": args.merge_blocks,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -709,6 +734,7 @@ def main() -> None:
                 args.wechat_qr,
                 args.variant_union,
                 args.style,
+                args.merge_blocks,
             )
             results.append(result)
             progress.advance(task)
