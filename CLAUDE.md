@@ -16,6 +16,7 @@ as fact.
 | `DECISIONS.md` | Time-ordered history: decision, why, evidence | **Append; never rewrite an entry.** Supersede an old one and mark it `Superseded`. Keep rejected options — they stop the next session re-litigating them. |
 | `CLAUDE.md` | Working guidance for Claude | The traps, the invariants, the things that look wrong but aren't. |
 | `VALIDATION.md` | What is measured, on whose data, and what is not | Update whenever a benchmark is run, a corpus changes, or a gap opens or closes. Every claim in it names its data source and who produced it. |
+| `LICENSE` | MIT, Project Tech4Dev | Covers the code and everything authored here. Data terms are per corpus in `SOURCES.md`, because they differ. |
 | `SOURCES.md` | Every dataset and model: licence as checked, link, and purpose | Add the row **before** using a source. Record how the licence was verified — API, page, or search — because those are different strengths of claim. Keep rejections; ethics rejections never expire. |
 
 Update all three when you:

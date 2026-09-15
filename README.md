@@ -251,6 +251,27 @@ boost, firing beside "Account No." and staying silent elsewhere. That only
 works because OCR puts the label next to its value; **re-score after
 changing OCR backend or PSM**.
 
+## Licence
+
+**Code: [MIT](LICENSE).**
+
+**Data** is not one thing, so it is stated per corpus in
+[SOURCES.md](SOURCES.md) and in each corpus's `_meta` block:
+
+| | |
+|---|---|
+| `datasets/documents/` | Fully synthetic and freely redistributable. Images 01–10 and every annotation are authored here and are MIT. Over the raw OpenAI-generated output in 11–20 no copyright is asserted — purely AI-generated images generally cannot be copyrighted for want of human authorship — so nothing restricts redistribution. |
+| `datasets/cheques/` | Apache-2.0, from [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images). Attribution is in the corpus `_meta`. |
+| `datasets/text/` | Third-party, **not committed**, fetched on demand: IndiaPII-Bench (CC-BY-4.0) and maskara-indian-pii-200k (MIT). |
+
+The two-tier rule: **MIT or Apache-2.0 for anything committed**, because
+committing is redistribution; non-commercial terms are acceptable for
+corpora fetched and used locally and never committed.
+
+The images reproduce official Indian document layouts and are **mockups
+for testing a privacy tool**. Every value on them is fabricated. Nothing
+here is, or should be presented as, an issued record.
+
 ## Benchmarks
 
 **OCR backends**, scored by leakage over the same 20 images:

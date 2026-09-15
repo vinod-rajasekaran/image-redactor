@@ -16,6 +16,9 @@ row says how its licence was established:
 | **unstated** | the source publishes no licence. Not the same as permissive. |
 | **self** | produced by this project, so the provenance is known first-hand rather than checked |
 
+**This repository's own licence is [MIT](LICENSE)**, which is what "carries
+this repository's licence" means in the rows below.
+
 **Licence policy, two tiers.** MIT/Apache is required for anything
 **committed to this repository**, because committing is redistribution.
 Non-commercial terms (CC BY-NC-SA, research-and-education licences) are
@@ -43,7 +46,7 @@ not.
 
 | corpus | licence / terms | verified | purpose |
 |---|---|---|---|
-| `datasets/documents/` images **01–10** | fully synthetic, this repository's licence | **self** | Ten Pillow-rendered Indian documents — Aadhaar, PAN, prescription, passbook, licence, voter ID, insurance, rental. Flat, crisp, no perspective: the easy end of the range, and the regression canary for the OCR-tolerant Aadhaar fallback lives here (`04_hospital_admission_report.png` carries a deliberately checksum-invalid number). |
+| `datasets/documents/` images **01–10** | fully synthetic; [MIT](LICENSE) | **self** | Ten Pillow-rendered Indian documents — Aadhaar, PAN, prescription, passbook, licence, voter ID, insurance, rental. Flat, crisp, no perspective: the easy end of the range, and the regression canary for the OCR-tolerant Aadhaar fallback lives here (`04_hospital_admission_report.png` carries a deliberately checksum-invalid number). |
 | `datasets/documents/` images **11–20** | **OpenAI assigns output rights to the user**, "to the extent permitted by applicable law" — see [Terms of Use](https://openai.com/policies/row-terms-of-use/) | **self** + **page** (terms) | Ten pages generated with an OpenAI image model, supplied as a collage and split. They *imitate* photographed documents — perspective, glare, low contrast — which makes them the hardest images in the corpus and the source of most known leaks. Every value on them is fabricated. |
 
 **Both halves are fully synthetic**: no real person, document, account or
