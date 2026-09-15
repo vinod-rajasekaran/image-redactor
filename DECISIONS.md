@@ -1699,3 +1699,67 @@ failure modes, and one rule learned today: **any new metric must report
 its trivial baseline.** The label benchmark's 100% recall looks like a
 triumph until the control shows that matching every labelled line scores
 the same, because the corpus is 87.6% PII-dense.
+
+---
+
+## 2026-09-15 — Local VLM: the integration works, this machine does not
+
+**Status:** Active — `redactor/vlm.py` shipped and correct; **not viable on
+8GB**, and not yet measured for accuracy
+
+Ollama 0.34 installed (it pulls MLX, so it uses Apple's runtime on Apple
+Silicon — the one reason LM Studio was under consideration, now moot),
+`qwen2.5vl:3b` pulled, served at `:11434/v1`, reached by our client.
+
+**The coordinate bug was real and was caught by drawing the boxes.** The
+model ignored a request for fractional coordinates and answered in
+absolute pixels: `[72, 172, 558, 192]` on a 900×1100 page. Read as
+per-mille — the rule this file recommended a few hours earlier — the box
+became x=64–502 where the name ran to 558, **clipping the end of a name
+that was supposed to be covered**. A box in the wrong place is a leak that
+looks like a redaction, which is the exact failure that killed per-region
+coverage earlier.
+
+Fixed at the source rather than by inference: the prompt now states the
+image dimensions and asks for absolute pixels, and the fallback inference
+now treats a coordinate that *fits inside the image* as pixels, inferring
+per-mille only when a coordinate is too large to be a pixel. The residual
+ambiguity is pinned in `test_vlm.py` with a comment saying which way it
+resolves and why.
+
+**Accuracy, one image, indicative only: 1 of 6 items.** On
+`01_aadhaar_card.png` it found the name — a tight, correctly placed box —
+and missed the DOB, the Aadhaar number, both address lines and the mobile.
+
+**Throughput, measured: 0.8 tokens/sec sustained, dipping to 0.08**, with
+system memory free at 13%. The machine is swapping. The arithmetic is what
+settles it, and it contains a perverse incentive:
+
+| reply | tokens | per image | 20 images |
+|---|---:|---:|---:|
+| 1 item found | ~42 | 0.9 min | 0.3 h |
+| 6 items found | ~252 | **5.2 min** | **1.8 h** |
+| 12 items found | ~504 | 10.5 min | 3.5 h |
+
+Against the Presidio pipeline's measured **1.75 s/image**. So the better
+the recall, the longer the reply, and the slower it gets — the useful case
+is the unaffordable one. A prompt variant asking for exhaustive extraction
+timed out at 300s for this reason.
+
+**What this does and does not establish.** It does not show that a vision
+model is a poor PII detector; a 3B model under memory pressure is not a
+fair test of the idea, and the one box it did produce was accurate. It
+establishes that **this approach cannot be evaluated on 8GB**, and that
+`--vlm` should stay off by default.
+
+**Three ways forward, unranked because the choice is about cost:**
+
+1. **More RAM.** A 7B model on 16–32GB is the fair test of the hypothesis.
+2. **A hosted VLM as the backup catch.** `vision.py` already talks to
+   Claude, and `compare_runs.py` already prices a second pass in seconds
+   per prevented leak. But this project's stated boundary is that the only
+   network call is for *scoring*, never redaction — routing detection
+   through an API crosses it, and that is a policy decision, not a
+   technical one.
+3. **Leave it.** The integration is committed, tested and off by default;
+   it costs nothing until someone has the hardware.

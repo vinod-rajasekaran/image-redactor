@@ -37,16 +37,29 @@ def main() -> int:
                 len(r) == 1 and r[0].left == 100 and r[0].top == 400
                 and r[0].width == 400 and r[0].height == 100, r)
 
-    permille = '{"items":[{"text":"Nisha","kind":"name","box":[100,200,500,250]}]}'
-    r = parse_items(permille, W, H)
-    ok &= check("per-mille (0-1000) is scaled by 1000",
-                len(r) == 1 and r[0].left == 100 and r[0].top == 400, r)
+    # Per-mille is inferred only when a coordinate cannot be a pixel, i.e.
+    # it exceeds the image. Here 900 > 400 wide.
+    permille = '{"items":[{"text":"Nisha","kind":"name","box":[100,200,900,250]}]}'
+    r = parse_items(permille, 400, 300)
+    ok &= check("per-mille inferred when a coordinate overflows the image",
+                len(r) == 1 and r[0].left == 40 and r[0].top == 60, r)
 
     pixels = '{"items":[{"text":"Nisha","kind":"name","box":[100,1200,500,1400]}]}'
     r = parse_items(pixels, W, H)
     ok &= check("absolute pixels are used as given",
                 len(r) == 1 and r[0].left == 100 and r[0].top == 1200
                 and r[0].height == 200, r)
+
+    # The residual ambiguity, pinned deliberately. A coordinate that fits
+    # inside the image could be either convention and is read as pixels,
+    # because that is what the prompt asks for and what grounded models
+    # return. Qwen2.5-VL was observed doing exactly this: read as per-mille,
+    # its box for a name came out clipped and left the end of the name
+    # visible. A model that answers in per-mille anyway will be mis-scaled.
+    ambiguous = '{"items":[{"text":"Nisha","kind":"name","box":[72,172,558,192]}]}'
+    r = parse_items(ambiguous, 900, 1100)
+    ok &= check("ambiguous magnitudes resolve to pixels, not per-mille",
+                len(r) == 1 and r[0].left == 72 and r[0].width == 486, r)
 
     print("\nmalformed replies a local model actually produces")
     fenced = '```json\n{"items":[{"text":"x","kind":"name","box":[0,0,0.5,0.5]}]}\n```'

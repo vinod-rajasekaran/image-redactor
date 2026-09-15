@@ -67,9 +67,17 @@ Answer with JSON only, no prose and no code fences:
 {"items": [{"text": "the value as printed", "kind": "name|address|phone|\
 email|dob|id_number|signature|other", "box": [x0, y0, x1, y1]}]}
 
-Give box coordinates as fractions of the image size, between 0 and 1, \
-where [0,0] is the top-left corner. If you find nothing, return \
-{"items": []}."""
+Give box coordinates in **absolute pixels**, with [0,0] at the top-left. \
+If you find nothing, return an empty items list."""
+
+# Appended separately rather than interpolated into PROMPT: the prompt
+# contains a literal JSON example, so `str.format` would trip over its
+# braces.
+SIZE_NOTE = "\n\nThis image is {width} pixels wide and {height} pixels tall."
+
+
+def build_prompt(width: int, height: int) -> str:
+    return PROMPT + SIZE_NOTE.format(width=width, height=height)
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
@@ -130,7 +138,7 @@ def _encode(image) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-def _scale_factor(values: list[float]) -> float:
+def _scale_factor(values: list[float], width: int, height: int) -> float:
     """Work out what coordinate convention the model answered in.
 
     Models disagree: some return fractions of the image, some per-mille
@@ -139,13 +147,20 @@ def _scale_factor(values: list[float]) -> float:
     leak that looks like a redaction. So infer it from the magnitudes
     rather than trusting the prompt to have been obeyed.
 
-    **One ambiguity survives and is resolved deliberately.** Per-mille and
-    absolute pixels overlap whenever the image is at least 1000px: a
-    coordinate of 800 could be either. It is read as per-mille, because the
-    prompt asks for normalised coordinates and the models that ignore that
-    are the Qwen family, which answers in per-mille. A model that genuinely
-    returns pixels on a large page will be mis-scaled — check the drawn
-    output on a first run with an unfamiliar model rather than assuming.
+    The prompt now asks for absolute pixels and states the image size, so
+    this is a safety net rather than the primary mechanism — but it is a
+    needed one. Qwen2.5-VL was observed ignoring a request for fractions
+    and answering in pixels; read as per-mille its box for a name came out
+    clipped, covering x=64-502 where the name ran to 558. A box in the
+    wrong place is a leak that looks like a redaction.
+
+    **The residual ambiguity resolves to pixels.** Per-mille and pixels
+    overlap whenever a coordinate fits inside the image, and there is no
+    way to tell them apart from magnitudes alone. Pixels wins because that
+    is what the prompt asks for and what grounded models return; per-mille
+    is inferred only when a coordinate is too large to be a pixel. A model
+    that answers in per-mille anyway will be mis-scaled — check a drawn
+    output on a first run with an unfamiliar model.
     """
     biggest = max(values, default=0.0)
     if biggest <= 2.0:
@@ -155,8 +170,9 @@ def _scale_factor(values: list[float]) -> float:
         # Nothing legitimate is lost: a per-mille or pixel box whose largest
         # coordinate is under 2 has no area and is dropped regardless.
         return 1.0
-    if biggest <= 1000.0:
-        return 1000.0       # per-mille, Qwen-VL's convention
+    if biggest > max(width, height):
+        # Cannot be pixels: it does not fit the image. Qwen2-VL's per-mille.
+        return 1000.0
     return 0.0              # absolute pixels: caller uses them as-is
 
 
@@ -175,7 +191,7 @@ def parse_items(content: str, width: int, height: int) -> list[VisualRegion]:
     items = data.get("items") or []
     coords = [c for item in items for c in (item.get("box") or [])
               if isinstance(c, (int, float))]
-    divisor = _scale_factor(coords)
+    divisor = _scale_factor(coords, width, height)
 
     regions: list[VisualRegion] = []
     for item in items:
@@ -224,7 +240,7 @@ def detect_pii_regions(
                             "url": f"data:image/jpeg;base64,{_encode(image)}"
                         },
                     },
-                    {"type": "text", "text": PROMPT},
+                    {"type": "text", "text": build_prompt(image.width, image.height)},
                 ],
             }
         ],

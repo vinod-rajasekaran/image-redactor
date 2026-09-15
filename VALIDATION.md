@@ -214,7 +214,24 @@ Label-anchoring is meant to cover those, but it needs page geometry, which
 a text benchmark cannot exercise. On text the cull is a pure loss; whether
 images recover it is **untested**.
 
-### 5. Untested entirely
+### 5. The vision-model path is unevaluated, and cannot be evaluated here
+
+`redactor/vlm.py` is shipped, tested and **off by default**. What is known:
+
+- the integration is correct — Ollama reached, boxes parsed, and a
+  coordinate bug found and fixed by *drawing the boxes and looking at them*
+- accuracy on one image: **1 of 6 PII items** (indicative only)
+- throughput on this machine: **0.8 tokens/sec**, memory free at 13%, so a
+  reply listing six items takes ~5 minutes per image against the Presidio
+  pipeline's measured 1.75 s/image
+
+That is an infeasibility result about 8GB of RAM, not evidence about
+vision models. A 3B model under memory pressure is not a fair test of the
+idea, and the single box it produced was accurate and tightly placed.
+Re-test on a machine that can hold a 7B model before drawing any
+conclusion about whether this replaces or supplements the OCR path.
+
+### 6. Untested entirely
 
 - **Devanagari and other Indic scripts.** Both text corpora are Latin. The
   lexicon carries Devanagari terms that no benchmark exercises.
