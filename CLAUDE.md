@@ -81,6 +81,13 @@ documents), five confirmed leaks, all partial-coverage failures.
   reasons.
 - `hygiene.py`, `runs.py`, `vision.py` — metadata stripping, run folders,
   shared Claude client.
+- `vlm.py` — optional vision-model detection against any OpenAI-compatible
+  endpoint, unioned as a fourth parallel path. Never substitutes for the
+  deterministic layer, and never fails an image: `_vlm_regions_for` returns
+  `[]` on any error, so a model being down cannot stop a run. The risky
+  part is the **coordinate convention** — fraction, per-mille and pixel all
+  occur, and guessing wrong puts every box in the wrong place, which is a
+  leak that looks like a redaction. `test_vlm.py` pins that inference.
 - `labels.py` — redacts the value *beside* a personal-data label, by
   geometry, whatever shape it has. This exists because shape-first
   detection cannot cover identifiers that have no national format, and

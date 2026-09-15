@@ -110,6 +110,26 @@ def build_engines(
     return image_analyzer, redactor
 
 
+def _vlm_regions_for(image, options: dict) -> list:
+    """Ask a vision model where the PII is. Never fails an image.
+
+    Union, not substitution: a model that misses something the regex layer
+    caught must not be able to remove a box, and a model that is down must
+    not be able to stop a run.
+    """
+    from . import vlm as vlm_module
+
+    try:
+        return vlm_module.detect_pii_regions(
+            image,
+            base_url=options.get("url", vlm_module.DEFAULT_URL),
+            model=options.get("model", vlm_module.DEFAULT_MODEL),
+            timeout=options.get("timeout", vlm_module.DEFAULT_TIMEOUT),
+        )
+    except Exception:
+        return []
+
+
 def _labelled_values_for(analyzer, image, factor: int) -> list:
     """Run the analyzer's own OCR over one variant and locate labelled values.
 
@@ -144,6 +164,7 @@ def process_image(
     style: str = "solid",
     merge_blocks: bool = True,
     label_anchored: bool = True,
+    vlm: dict | None = None,
 ) -> ImageResult:
     from PIL import Image
 
@@ -199,9 +220,15 @@ def process_image(
                 pool.submit(_labelled_values_for, analyzer, v, factor)
                 for v in (variants if label_anchored else [])
             ]
+            # A fourth parallel path, on the original image rather than a
+            # preprocessed variant: the preprocessing exists to help OCR,
+            # and a vision model does not want it.
+            vlm_job = pool.submit(_vlm_regions_for, image, vlm) if vlm else None
             per_variant = [job.result() for job in text_jobs]
             regions = visual_job.result() if visual_job else []
             label_regions = [job.result() for job in label_jobs]
+            if vlm_job is not None:
+                label_regions.append(vlm_job.result())
     except Exception as exc:
         logger.exception("Analysis failed for %s", path.name)
         return ImageResult(

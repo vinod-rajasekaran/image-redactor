@@ -123,10 +123,56 @@ download-on-demand. Licences and provenance per corpus:
 | `--medical-ner` | off | Detect diagnoses/medications (needs transformers) |
 | `--strict-aadhaar` | off | Require a valid Verhoeff checksum |
 | `--pyzbar` / `--wechat-qr` | off | Extra code detectors (supplements, not replacements) |
+| `--vlm` | off | Union a local vision model's boxes on top (see below) |
+| `--vlm-url` / `--vlm-model` | Ollama / `qwen2.5vl:3b` | Any OpenAI-compatible server |
 
 `--threshold` and `--entities` mirror the config of
 [kaapi-guardrails' `pii_remover`](https://github.com/ProjectTech4DevAI/kaapi-guardrails/blob/main/docs/validators/pii-remover.md).
 The default threshold is a deliberate divergence — see below.
+
+## A vision model as a second pass
+
+Most of this pipeline is a hand-rolled substitute for reading a document —
+preprocessing variants because OCR is fragile, a reading-order re-sort
+because OCR flattens layout, label geometry because forms pair labels with
+values, recognizers because a regex cannot know what a name is. A vision
+model does all four natively, and this project's own evidence points that
+way: `vision_score.py` uses one to read redacted output and it finds leaks
+that OCR and a careful manual pass both miss.
+
+It is wired in as **another parallel path, unioned** — not a replacement.
+The deterministic layer keeps what only it offers: a Verhoeff checksum on
+Aadhaar, IFSC's fixed `0`, and an auditable reason each box was drawn. A
+model being wrong can then only add a box, never remove one.
+
+```bash
+ollama serve
+ollama pull qwen2.5vl:3b
+python evaluate_redactor.py --input <images> --run-name vlm --vlm
+```
+
+LM Studio works identically — start its server and pass
+`--vlm-url http://localhost:1234/v1`. Anything OpenAI-compatible will do;
+the code has no runtime-specific behaviour.
+
+**Is it worth the time?** That is a measurement, not an opinion:
+
+```bash
+python compare_runs.py runs/base runs/vlm
+```
+
+It reports the **marginal catch** (items the baseline leaked and the
+candidate covered), **regressions** (which unioning should make
+impossible — a non-zero count means something is wrong), and **seconds per
+prevented leak**. It prints the exchange rate; what a prevented leak is
+worth is your call.
+
+**Bounding boxes are the open question.** Knowing the number is
+`8643 6694 9352` does not say what to black out, and vision-generated
+boxes were measured on this corpus at about a text row off — which is why
+per-region coverage was built, measured and deleted. Document-grounded
+models return boxes with the text, so it is worth re-testing, but treat it
+as a hypothesis. Check a drawn output before trusting a new model.
 
 ## How an image is processed
 

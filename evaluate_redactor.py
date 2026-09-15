@@ -206,6 +206,33 @@ def main() -> None:
             "but yields no box for a code it cannot decode"
         ),
     )
+    parser.add_argument(
+        "--vlm",
+        action="store_true",
+        help=(
+            "Additionally ask a local vision model where the PII is, and "
+            "union its boxes with everything else. Needs an OpenAI-compatible "
+            "server (ollama serve, or LM Studio's). Off by default: it is "
+            "orders of magnitude slower than OCR and its value over the "
+            "deterministic layer is what --vlm exists to measure"
+        ),
+    )
+    parser.add_argument(
+        "--vlm-url",
+        default=None,
+        help="OpenAI-compatible base URL (default: Ollama on :11434/v1; "
+             "LM Studio is http://localhost:1234/v1)",
+    )
+    parser.add_argument(
+        "--vlm-model",
+        default=None,
+        help="Vision model id, e.g. qwen2.5vl:3b. On 8GB machines stay at 3B "
+             "or below",
+    )
+    parser.add_argument(
+        "--vlm-timeout", type=int, default=None,
+        help="Seconds to wait per image (default: 180)",
+    )
     parser.set_defaults(visual_pii=True)
     parser.add_argument(
         "--threshold",
@@ -276,6 +303,40 @@ def main() -> None:
 
     check_prerequisites(logger, args.ocr)
 
+    vlm_options = None
+    if args.vlm:
+        from redactor import vlm as vlm_module
+
+        vlm_options = {
+            "url": args.vlm_url or vlm_module.DEFAULT_URL,
+            "model": args.vlm_model or vlm_module.DEFAULT_MODEL,
+            "timeout": args.vlm_timeout or vlm_module.DEFAULT_TIMEOUT,
+        }
+        # Fail here rather than silently produce a run with no VLM boxes:
+        # `_vlm_regions_for` swallows per-image errors by design, so an
+        # unreachable server would otherwise look like a model that found
+        # nothing.
+        served = vlm_module.available(vlm_options["url"])
+        if not served:
+            console.print(
+                f"[red]No OpenAI-compatible server at {vlm_options['url']}[/red]\n"
+                "  ollama serve     (then: ollama pull qwen2.5vl:3b)\n"
+                "  or LM Studio -> Developer -> Start Server, then "
+                "--vlm-url http://localhost:1234/v1"
+            )
+            sys.exit(1)
+        if vlm_options["model"] not in served:
+            console.print(
+                f"[red]{vlm_options['model']!r} is not served by "
+                f"{vlm_options['url']}[/red]\n"
+                f"Available: {', '.join(served) or 'none'}"
+            )
+            sys.exit(1)
+        logger.info(
+            "Vision model enabled: [bold]%s[/bold] at %s",
+            vlm_options["model"], vlm_options["url"],
+        )
+
     console.rule(f"[bold blue]Presidio Image Redactor Evaluation — {run_name}")
 
     config = {
@@ -297,6 +358,7 @@ def main() -> None:
         "entities": args.entities or "all_supported",
         "ocr_tolerant_aadhaar": not args.strict_aadhaar,
         "upscale": args.upscale,
+        "vlm": vlm_options,
         "python": platform.python_version(),
         "platform": platform.platform(),
     }
@@ -332,6 +394,7 @@ def main() -> None:
         console=console,
     ) as progress:
         task = progress.add_task("Processing images", total=len(image_paths))
+
         for path in image_paths:
             progress.update(task, description=f"Processing [bold]{path.name}[/bold]")
             result = process_image(
@@ -348,6 +411,7 @@ def main() -> None:
                 args.variant_union,
                 args.style,
                 args.merge_blocks,
+                vlm=vlm_options,
             )
             results.append(result)
             progress.advance(task)
