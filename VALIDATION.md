@@ -55,6 +55,7 @@ session could reach for it.
 | recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **75.6% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
 | region coverage on images | 10 cheques, 30 regions, boxes drawn by the publishers | third party | Apache-2.0 | **0 of 30 fully covered** |
+| label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **44/180 fully covered, vs 12/180 with the mechanism off** |
 
 ### Project-produced evidence, and therefore weaker
 
@@ -213,8 +214,13 @@ cheapest available improvement to the evidence base.
 - the **lexicon** — does it recognise a label as introducing PII?
   **Measured**: 100% recall / 97.2% precision on 2,000 independent forms.
 - the **geometry** — does it pair that label with the right value on a
-  page? **Not measured on real data at all.** Pinned only by
-  `test_labels.py` on hand-built OCR dicts.
+  page? **Now measured**: on 20 synthetic Indonesian ID cards with
+  publisher-authored boxes, turning it on lifts regions fully covered from
+  **12/180 to 44/180**, with per-field gains of +29 to +50 points. The
+  sharpest evidence is `religion` (13%→60%) and `blood_type` (62%→91%),
+  which no recognizer covers at all — nothing but label-anchoring can
+  redact those. Still unmeasured: Devanagari, handwriting, Indian form
+  conventions.
 
 ### 4. The recognizer cull cost 9 points on text, and the replacement is unproven there
 

@@ -75,6 +75,12 @@ STRONG_TERMS: frozenset[str] = frozenset({
     "vehicle", "registration", "chassis", "engine", "rc",
     # Devanagari
     "आधार", "मोबाइल", "पैन", "खाता", "दूरभाष",
+    # Indonesian, for the KTP corpus that tests the geometry half. These are
+    # the labels printed on every national ID card, not shapes inferred from
+    # data — the same bar a recognizer has to clear. nik = national ID,
+    # nama = name, alamat = address, lahir = born, agama = religion.
+    "nik", "nama", "alamat", "lahir", "agama", "darah",
+    "kecamatan", "kelurahan", "desa", "rt", "rw",
 })
 
 # Terms that identify a person only when the label is about a person rather
@@ -103,6 +109,12 @@ FILLER_TERMS: frozenset[str] = frozenset({
     "registered", "full", "permanent", "present", "current", "correspondence",
     "communication", "residential", "primary", "alternate", "applicant",
     "holder", "s", "and", "or", "in", "as", "per", "type", "date",
+    # Indonesian label scaffolding. "jenis kelamin" (gender) reduces to
+    # nothing but filler and so is correctly not PII, matching the rule that
+    # a bare gender identifies nobody.
+    "tempat", "tgl", "tanggal", "gol", "jenis", "kelamin", "kel",
+    "status", "perkawinan", "pekerjaan", "kewarganegaraan",
+    "berlaku", "hingga",
 })
 
 

@@ -207,6 +207,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--no-label-anchored",
+        dest="label_anchored",
+        action="store_false",
+        help=(
+            "Disable label-anchored redaction — covering the value beside a "
+            "personal-data label regardless of its shape. Exists to measure "
+            "the mechanism's contribution by A/B, not as a recommended setting"
+        ),
+    )
+    parser.add_argument(
         "--vlm",
         action="store_true",
         help=(
@@ -351,6 +361,7 @@ def main() -> None:
         "variant_union": args.variant_union,
         "style": args.style,
         "merge_blocks": args.merge_blocks,
+        "label_anchored": args.label_anchored,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -411,6 +422,7 @@ def main() -> None:
                 args.variant_union,
                 args.style,
                 args.merge_blocks,
+                args.label_anchored,
                 vlm=vlm_options,
             )
             results.append(result)

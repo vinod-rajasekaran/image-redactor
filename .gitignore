@@ -212,3 +212,6 @@ input_annotations.json
 
 # Realism probe corpora — experiments, superseded once a setting is chosen
 datasets/probe_*/
+
+# Fetched on demand: CC-BY-4.0, and this repo commits only MIT/Apache corpora
+datasets/ktp/

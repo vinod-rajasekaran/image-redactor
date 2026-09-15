@@ -1763,3 +1763,68 @@ establishes that **this approach cannot be evaluated on 8GB**, and that
    technical one.
 3. **Leave it.** The integration is committed, tested and off by default;
    it costs nothing until someone has the hardware.
+
+---
+
+## 2026-09-15 — Label-anchored geometry, measured on real pages at last
+
+**Status:** Active — `ktp_benchmark.py`, `datasets/ktp/` (fetched, not committed)
+
+`redactor/labels.py` has been enabled by default since it was written, on
+the strength of OCR dictionaries typed by hand. It now has real evidence.
+
+**The corpus.** 20 synthetic Indonesian national ID cards from
+`cloverx-id/indonesian-id-card-dummy` (CC-BY-4.0, publisher-declared dummy
+data), carrying **publisher-authored per-field boxes** — the only
+circumstance where coverage means anything here. 180 PII regions. A KTP is
+structurally an Aadhaar card: national ID number, name, date of birth,
+address.
+
+**The isolation that makes it a geometry result.** The lexicon knew
+**0 of 6** Indonesian labels, so a score taken straight away would have
+measured the OCR path and been read as geometry. Six Indonesian terms were
+added first — `nik`, `nama`, `alamat`, `lahir`, `agama`, `darah` — which
+are printed on every card, the same "cite the published thing" bar a
+recognizer has to clear. `ktp_benchmark.py --diagnose` exists to force
+that check before anyone reads a coverage number.
+
+**Result, A/B on the same 20 cards:**
+
+| field | anchoring off | on | gain |
+|---|---:|---:|---:|
+| address | 16% | **61%** | +45 |
+| id_number | 32% | **82%** | +50 |
+| name | 21% | **63%** | +42 |
+| birth_info | 40% | **75%** | +35 |
+| religion | 13% | **60%** | +47 |
+| blood_type | 62% | **91%** | +29 |
+| **regions fully covered** | **12/180** | **44/180** | **3.7×** |
+
+**The cleanest evidence is the bottom two rows.** `religion` and
+`blood_type` have *no recognizer at all* — no regex matches `BUDHA` or
+`O`. Nothing but label-anchoring can cover them, and they move 13→60 and
+62→91. The mechanism does what it was built to do, on pages nobody here
+drew.
+
+**A leak found by looking at the image, not the table.** `RT/RW : 009/014`
+was completely unredacted: `rt` and `rw` had been classified as *filler*,
+so the label reduced to nothing and never anchored. RT/RW is the
+neighbourhood unit of an Indonesian address. Moved to strong terms;
+address coverage 55% → 61%, fully covered 41 → 44. The table looked
+reasonable before the fix — only the drawn output showed the hole.
+
+**The coverage figures understate, and the reason matters.** The
+publishers' boxes are **padded to a fixed column width**, extending well
+past the text they contain. A perfectly covered value therefore scores
+around 65%. So 44/180 is a floor, not an estimate, and this is one more
+reason legibility stays the headline metric while coverage stays a warning
+signal. Whether these cards are *readable* after redaction has not been
+scored yet.
+
+**What this does not establish:** nothing about Devanagari, handwriting,
+or Indian form conventions. It establishes that the label→value geometry
+works on real pages, which is exactly the half that was unevidenced.
+
+**Adding the Indonesian terms did not disturb the Indian result** —
+`benchmark_labels.py` still reports 100% recall / 97.2% precision on
+IndiaPII-Bench, checked before and after.
