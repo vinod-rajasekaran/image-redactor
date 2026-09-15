@@ -41,56 +41,106 @@ import unicodedata
 
 from .geometry import VisualRegion
 
-# Labels whose value is personal data. Matched against the OCR text with
-# punctuation and case normalised away, so "Account No.:" and "ACCOUNT NO"
-# are the same key. Devanagari entries are here because real Indian forms
-# print the label bilingually and the English half is not always the one
-# OCR reads cleanly.
+# Whether a label introduces personal data is decided on its **words**, not
+# on the whole phrase. Exact-phrase matching was tried first and scored 43.5%
+# recall against 2,000 independent Indian forms (IndiaPII-Bench), and the
+# misses were not exotic vocabulary — they were morphology. The lexicon knew
+# "mobile" but not "mobile number", "account number" but not "bank account
+# number", "driving licence" but not "driving licence no". Enumerating every
+# variant is the same losing game as enumerating every number format.
 #
-# A label earns a place when the value beside it identifies *a person*.
-# Institutional fields — branch code, CIN, IFSC of the branch, helpline —
-# are excluded: they identify an organisation, and this project has
-# already ruled that an amount or a bare date identifies nobody.
-PII_LABELS: tuple[str, ...] = (
-    # who
-    "name", "full name", "applicant name", "patient name", "account holder",
-    "account holder name", "holder name", "complainant name", "informant name",
-    "registered owner", "owner name", "father name", "fathers name",
-    "father husband name", "husband name", "mother name", "spouse name",
-    "guardian name", "nominee", "nominee name", "attending doctor",
-    "consultant", "pathologist", "referred by", "signatory", "employee name",
-    "नाम", "पिता का नाम", "पूरा नाम", "आवेदक का नाम",
-    # where / how to reach
-    "address", "residential address", "permanent address", "correspondence address",
-    "property address", "communication address", "present address",
-    "phone", "phone no", "mobile", "mobile no", "contact", "contact no",
-    "contact number", "telephone", "email", "email id", "e mail",
-    "पता", "मोबाइल", "दूरभाष",
-    # account and customer identity
-    "account no", "account number", "a c no", "ac no", "customer id",
-    "customer no", "client id", "crn", "cif", "cif no", "folio no",
-    "खाता संख्या", "ग्राहक संख्या",
+# So a label matches when it *contains* a term that marks personal data.
+# `benchmark_labels.py` measures both directions against that corpus.
+
+# Terms that identify a person on their own. Any one is sufficient.
+STRONG_TERMS: frozenset[str] = frozenset({
     # government identity
-    "aadhaar", "aadhaar no", "aadhaar number", "uid", "uid no", "vid",
-    "pan", "pan no", "pan number", "passport no", "passport number",
-    "voter id", "epic no", "driving licence", "driving license", "dl no",
-    "licence no", "license no", "ration card", "ration card no",
-    "आधार", "आधार संख्या",
+    "aadhaar", "aadhar", "uid", "vid", "pan", "passport", "voter", "epic",
+    "licence", "license", "dl", "ration", "abha", "gstin", "tan", "uan",
+    # contact
+    "mobile", "phone", "telephone", "email", "mail", "pin", "pincode",
+    "postcode", "zip",
+    # money
+    "account", "acct", "ac", "iban", "upi", "vpa", "micr", "ifsc", "folio",
+    "crn", "cif", "customer",
     # health
-    "patient id", "uhid", "mrn", "medical record no", "medical record number",
-    "hospital no", "ip no", "op no", "opd no", "registration no",
-    "reg no", "sample id", "specimen id", "lab no", "lab id",
-    # case, policy, booking, property
-    "policy no", "policy number", "claim no", "claim number",
-    "fir no", "fir number", "case no", "complaint no", "diary no",
-    "pnr", "pnr no", "booking ref", "booking reference", "ticket no",
-    "survey no", "khasra no", "khata no", "khewat no", "dag no",
-    "plot no", "document no", "deed no", "registration number",
-    "सर्वे नंबर", "खसरा संख्या",
+    "uhid", "mrn", "patient", "abha", "sample", "specimen", "lab",
+    # case and booking
+    "policy", "claim", "fir", "pnr", "ticket", "booking", "case",
+    "complaint", "diary",
+    # property
+    "survey", "khasra", "khesra", "khata", "khatauni", "khewat", "dag",
+    "jamabandi", "patta", "chitta", "pahani", "satbara", "plot", "deed",
+    # vehicle
+    "vehicle", "registration", "chassis", "engine", "rc",
+    # Devanagari
+    "आधार", "मोबाइल", "पैन", "खाता", "दूरभाष",
+})
+
+# Terms that identify a person only when the label is about a person rather
+# than an institution. "Policyholder Name" is personal; "Branch Name" is not.
+WEAK_TERMS: frozenset[str] = frozenset({
+    "name", "address", "contact", "signature", "nominee", "guardian",
+    "father", "mother", "husband", "spouse", "dob", "birth", "age",
+    "नाम", "पता", "हस्ताक्षर",
+})
+
+# An institution, not a person. These veto a weak term but never a strong
+# one, so "Bank Account Number" still matches while "Bank Name" does not.
+INSTITUTION_TERMS: frozenset[str] = frozenset({
+    "branch", "bank", "hospital", "clinic", "company", "firm", "office",
+    "department", "station", "institution", "school", "college", "university",
+    "insurer", "issuer", "authority", "board", "corporation", "ltd",
+    "limited", "helpline", "website", "cin", "gst", "scheme", "product",
+    "merchant", "vendor", "organisation", "organization", "employer",
+})
+
+# Words that carry no meaning for this decision. Stripped before matching so
+# a label's core survives its packaging.
+FILLER_TERMS: frozenset[str] = frozenset({
+    "no", "nos", "number", "num", "id", "code", "details", "detail", "of",
+    "the", "for", "if", "any", "self", "employed", "please", "enter",
+    "registered", "full", "permanent", "present", "current", "correspondence",
+    "communication", "residential", "primary", "alternate", "applicant",
+    "holder", "s", "and", "or", "in", "as", "per", "type", "date",
+})
+
+
+def label_terms(label: str) -> set[str]:
+    """The meaningful words of a label, filler removed."""
+    return {w for w in normalise(label).split() if w and w not in FILLER_TERMS}
+
+
+# Every word a label may be built from. A candidate phrase is only a label
+# if all of its words are in here — otherwise longest-match swallows the
+# value it is supposed to anchor ("Customer ID 100724681" matched as one
+# four-word label once "contains a term" replaced exact-phrase matching,
+# and the value then vanished from the box entirely).
+LABEL_VOCABULARY: frozenset[str] = (
+    STRONG_TERMS | WEAK_TERMS | INSTITUTION_TERMS | FILLER_TERMS
 )
 
-# Normalised for lookup once at import.
-_NORMALISED_LABELS = frozenset(PII_LABELS)
+
+def is_label_phrase(phrase: str) -> bool:
+    """Is every word of this phrase part of label vocabulary?"""
+    words = normalise(phrase).split()
+    return bool(words) and all(w in LABEL_VOCABULARY for w in words)
+
+
+def is_pii_label(label: str) -> bool:
+    """Does a value beside this label identify a person?
+
+    A strong term decides it outright. A weak term decides it only when no
+    institutional term is present, so "Account Holder Name" matches and
+    "Bank Name" does not.
+    """
+    terms = label_terms(label)
+    if not terms:
+        return False
+    if terms & STRONG_TERMS:
+        return True
+    return bool(terms & WEAK_TERMS) and not (terms & INSTITUTION_TERMS)
+
 
 # A label may be one to this many OCR words. Bounded so a whole sentence
 # cannot be read as a label.
@@ -108,7 +158,10 @@ BELOW_MAX_SHIFT = 1.0         # horizontal drift allowed for a value beneath
 # paragraph is not a field value.
 MAX_VALUE_WORDS = 12
 
-_PUNCT = re.compile(r"[^\w\sऀ-ॿ]+", re.UNICODE)
+# Underscore is a word character to `\w`, so a JSON-style key such as
+# "customer_name" would survive as one unmatchable token. Independent data
+# caught this: 200 labels missed on maskara for exactly that reason.
+_PUNCT = re.compile(r"[^\w\sऀ-ॿ]+|_+", re.UNICODE)
 _SPACES = re.compile(r"\s+")
 
 
@@ -163,7 +216,7 @@ def find_labels(words: list[dict]) -> list[tuple[int, int, str]]:
             if any(not _same_row(group[0], w) for w in group[1:]):
                 continue
             phrase = normalise(" ".join(w["text"] for w in group))
-            if phrase in _NORMALISED_LABELS:
+            if is_label_phrase(phrase) and is_pii_label(phrase):
                 match = (i, i + span, phrase)
                 break
         if match:
@@ -185,13 +238,20 @@ def _value_words(words: list[dict], start: int, end: int) -> list[dict]:
     label_right = label["left"] + label["width"]
     height = max(label["height"], 1)
 
-    right = [
+    # The gap limit gates where the value *starts*, never which of its words
+    # are kept. Applying it per word truncates the value at whatever point it
+    # runs past the limit — "Anita Iyer" became "Anita". The same mistake was
+    # made in the stacked branch below; both are fixed the same way.
+    on_row = [
         w for w in words[end:]
-        if _same_row(label, w)
-        and w["left"] >= label_right
-        and w["left"] - label_right <= MAX_GAP_RIGHT * height
+        if _same_row(label, w) and w["left"] >= label_right
     ]
-    if right:
+    start_word = next(
+        (w for w in on_row if w["left"] - label_right <= MAX_GAP_RIGHT * height),
+        None,
+    )
+    if start_word is not None:
+        right = [w for w in on_row if w["left"] >= start_word["left"]]
         return right[:MAX_VALUE_WORDS]
 
     # The drift limit locates where the value *starts*; it must not then be

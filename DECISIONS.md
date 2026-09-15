@@ -1547,3 +1547,85 @@ the lever, not photography). But their only product was a corpus that
 cannot count as evidence, and keeping a generator whose output must never
 be cited is worse than keeping no generator: the next session would use
 it. The probe's findings stay recorded above; the machinery does not.
+
+---
+
+## 2026-09-15 — The label lexicon, measured on independent Indian forms
+
+**Status:** Active — `redactor/labels.py`, `benchmark_labels.py`, `test_labels.py`
+
+The search for independent Indian document *images* came up empty, and
+that is worth recording as a result rather than a gap in effort:
+
+| candidate | why not |
+|---|---|
+| presidio-research | a template+Faker **generator**, ships no corpus. Presidio's own India recognizers therefore have no independent evidence either. |
+| IndicDLP (MIT, 121k real Indian pages) | 11 of its 12 domains carry no field-PII, public forms are blank templates, and it is layout boxes with no text |
+| FUNSD (199 forms, human label→value links) | non-commercial research licence — and it is the *perfect* shape |
+| XFUND | CC BY-NC-SA 4.0 |
+| LeakageBench (500 images, 11,954 PII annotations) | Data Use Agreement, GDPR/European, days old |
+| nvisycom/synthetic (MIT) | "only text-bearing formats render" — images unimplemented |
+
+The structural reason: documents containing real PII are not published,
+and almost nobody builds synthetic replacements. The cheque dataset's own
+paper is titled *"Open Annotations and Synthetic Data for Field
+Localisation in Indian Bank Cheques"* — released Apache-2.0 because the
+field had nothing.
+
+**But the lexicon half was testable all along, and we had the data.** Every
+one of IndiaPII-Bench's 2,000 documents is a `Label: Value` form written
+by someone else. That is 9,782 PII values sitting after a label.
+
+**First measurement: 43.5% recall.** The misses were not exotic vocabulary,
+they were morphology — the lexicon knew "mobile" but not "mobile number",
+"account number" but not "bank account number", "driving licence" but not
+"driving licence no". Enumerating variants is the same losing game as
+enumerating number formats, one level up.
+
+**So matching moved from the phrase to its words**: strong terms decide
+outright, weak terms ("name", "address") decide only when no institutional
+term is present, filler is stripped. "Bank Account Number" matches, "Bank
+Name" does not.
+
+| | recall | precision |
+|---|---:|---:|
+| exact-phrase | 43.5% | — |
+| **token matching** | **100.0%** | **97.2%** |
+| control: match every labelled line | 100.0% | 87.6% |
+
+**The control is the honest part.** This corpus is 87.6% PII-dense, so a
+rule that matches everything already gets 100% recall. What the token rule
+buys is discrimination: **1,103 of the 1,382 non-PII labelled lines are
+rejected, with no PII lost.** On maskara, the deliberately OCR-corrupted
+domain scores 100% and the rest 94.6%.
+
+**Three bugs found, each by a different kind of evidence:**
+
+- *Independent data* found that `"customer_name"` never matched: underscore
+  is a `\w` character, so a JSON-style key survived as one token. 200 misses.
+- *A unit test* found that switching to "contains a term" broke
+  longest-match — `Customer ID 100724681` matched as a four-word label and
+  swallowed the value it was supposed to anchor. Fixed by requiring every
+  word of a label to be label vocabulary.
+- *The same unit test* found the value-truncation bug **twice**: the
+  positional gap limit was applied to every word of a value instead of only
+  to where the value starts, so "Anita Iyer" became "Anita" and an address
+  became "H.No.". Fixed identically in both branches.
+
+**A fourth was caught by reading output rather than trusting a tool:** a
+`str.replace` meant to fix the underscore silently matched nothing, because
+the file held a literal Devanagari range where the patch expected a `\u`
+escape. The "fix" was applied and changed nothing; only checking the result
+revealed it.
+
+**Still untested:** the geometry that pairs label to value on a real page,
+Devanagari labels at scale (both text corpora are Latin script), and real
+OCR noise on labels rather than maskara's synthetic corruption.
+`test_labels.py` pins the geometry on hand-built OCR dicts and says out
+loud that this is the weaker kind of evidence.
+
+**Correction to an earlier claim in this file:** the maskara "false
+positives" on `Address` labels were not errors. That corpus's `ocr` domain
+annotates only `PERSON_NAME` and `AADHAAR`, so the addresses we found are
+real PII its ground truth omits. Precision measured against incomplete
+truth understates itself.

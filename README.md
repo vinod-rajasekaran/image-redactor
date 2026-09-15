@@ -253,6 +253,32 @@ Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
 models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
 they share a model lineage was wrong.
 
+**Label lexicon** — `redactor/labels.py` redacts the value *beside* a
+personal-data label rather than matching the value's shape, because every
+bank, hospital and registry in India invents its own numbering. All 2,000
+IndiaPII-Bench documents are `Label: Value` forms written by someone else,
+which makes them the only independent test of that lexicon:
+
+```bash
+python benchmark_labels.py
+```
+
+| | recall | precision |
+|---|---:|---:|
+| exact-phrase matching (first attempt) | 43.5% | — |
+| **token matching** | **100.0%** | **97.2%** |
+| a rule that matches every labelled line | 100.0% | 87.6% |
+
+The third row is the control that keeps the second honest: this corpus is
+87.6% PII-dense, so 100% recall is easier than it sounds. The real gain is
+discrimination — **80% of the non-PII labelled lines are rejected while no
+PII is lost**. On maskara the OCR-corrupted domain also scores 100%.
+
+What this does *not* test: the geometry that pairs a label to its value on
+a page, which needs annotated form images that do not exist for India
+under a permissive licence. That half is pinned by `test_labels.py` on
+hand-built OCR output — weaker evidence, and labelled as such.
+
 **Cheques** — 10 synthetic Indian cheques
 ([`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images),
 Apache-2.0) with human-authored field boxes. The first test data here that
@@ -367,6 +393,7 @@ annotate_leaks.py           draw failures onto the images
 benchmark_ocr.py            OCR configs, recall vs cost
 benchmark_indiapii.py       recognizers vs IndiaPII-Bench (CC-BY-4.0)
 benchmark_maskara.py        recognizers vs maskara-indian-pii-200k (MIT)
+benchmark_labels.py         label lexicon vs IndiaPII-Bench forms
 cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 test_metadata_stripping.py  regression guard for EXIF stripping
 setup.sh                    one-time environment setup

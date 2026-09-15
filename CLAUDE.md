@@ -190,8 +190,12 @@ dependency this project would have).
   than no number; per-region coverage was built, measured, and removed for
   exactly this reason.
 - Console output uses `rich` throughout — match that style over `print()`.
-- `test_metadata_stripping.py` is the only test suite, and it guards one
-  thing: that redacted output carries no EXIF, GPS or embedded thumbnail.
+- `test_labels.py` pins the label geometry on hand-built OCR dicts. Every
+  case in it was written from a bug it caught, not from imagination — twice
+  the same mistake, applying a positional limit to every word of a value
+  instead of only to where the value starts, which silently truncated
+  multi-word values. Run it after touching `labels.py`.
+- `test_metadata_stripping.py` guards one thing: that redacted output carries no EXIF, GPS or embedded thumbnail.
   It was verified to fail when the protection is removed. Validation is
   otherwise by running the pipeline and scoring it.
 - Stage files explicitly rather than `git add -A`; a broad add committed a
