@@ -94,7 +94,9 @@ A corpus that knows both should record both.
 
 ## Adding a corpus
 
-Write `_meta` with a `source` and a `licence` before anything else. A
+Add a row to [`SOURCES.md`](../SOURCES.md) first — licence as checked,
+link, and what it lets you measure. Then write `_meta` with a `source` and
+a `licence` before anything else. A
 corpus whose provenance cannot be stated in one line does not belong
 here, and one that is not synthetic does not belong here at all — real
 document images are exactly what this tool exists to protect, and its

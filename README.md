@@ -14,6 +14,8 @@ measurable — the naive answers turned out to be wrong six times.
 > the evidence behind it, and the options tried and rejected.
 > [VALIDATION.md](VALIDATION.md) is how far to trust any number here, and
 > what is still unmeasured.
+> [SOURCES.md](SOURCES.md) is every dataset and model, its licence as
+> checked, and what it is for.
 
 ## Current result
 
