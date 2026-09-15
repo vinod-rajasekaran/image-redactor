@@ -1538,3 +1538,12 @@ than regenerated, because that file's 77 items are the product of three
 revisions and an independent audit that `build_ground_truth.py` would
 overwrite. Item count and text verified unchanged; scoring is
 legibility-based and never read the field.
+
+**Addendum — the generator tooling went too.** `generate_openai_documents.py`,
+`compare_realism.py` and `redactor/synth.py` are deleted, along with the
+`openai` dependency and the `OPENAI_API_KEY` field. They worked, and the
+realism probe they ran produced a genuine finding (document structure is
+the lever, not photography). But their only product was a corpus that
+cannot count as evidence, and keeping a generator whose output must never
+be cited is worse than keeping no generator: the next session would use
+it. The probe's findings stay recorded above; the machinery does not.

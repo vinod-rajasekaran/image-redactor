@@ -83,9 +83,6 @@ documents), five confirmed leaks, all partial-coverage failures.
   detection cannot cover identifiers that have no national format, and
   because every OCR word already carries a box that the text-flattening
   path was throwing away.
-- `synth.py` — fake Indian field *values*, with no renderer attached. Both
-  document generators draw from it, so a flat Pillow page and a photoreal
-  one carry identical values and one ground truth serves both.
 
 `datasets/` holds every validation corpus — images and annotations
 together, one schema, loaded through `redactor.datasets.load(name)`.
@@ -152,15 +149,14 @@ notice. Anything else is a label problem, not a pattern one — see
 them. Two Paddle bugs looked like improvements by that measure. Score
 leakage instead.
 
-**An image model's ground truth is what it rendered, never what you asked
-for.** `generate_openai_documents.py` prompts for specific values, then has
-Claude read the page back and records *that*. Trusting the prompt would
-produce a corpus scored against text no image contains. Two rules hold it
-together: the verifier is a different vendor from the generator, so a
-hallucinated value cannot be confirmed by the model that invented it; and
-a grey portrait silhouette must be counted as `face: 0`, because a face
-detector cannot find a silhouette and recording one manufactures a
-failure no tool could ever pass.
+**Evidence must come from data this project did not produce.** The
+image-model generator, its value layer and the realism comparison tool
+were all deleted in September 2026 along with the corpora they made. They
+worked; the problem was that nothing they produced could count as
+evidence, because the same hand wrote the generator, the recognizers and
+the ground truth. If a change needs validating, it needs `datasets/cheques/`,
+IndiaPII-Bench or maskara — and if none of those covers it, say so rather
+than reaching for a corpus you can generate.
 
 ## Measurement — the thing this project keeps getting wrong
 

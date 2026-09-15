@@ -355,11 +355,10 @@ redactor/            the package
   runs.py            run folders, config.json, summary.json
   vision.py          shared Claude client and .env loading
   datasets.py        corpus loader and the one annotation schema
-  synth.py           fake Indian names, numbers and addresses
+  labels.py          redact the value beside a personal-data label
 
 evaluate_redactor.py        the CLI
 generate_test_images.py     synthetic Indian documents (Pillow, flat)
-generate_openai_documents.py  synthetic documents (OpenAI, photoreal)
 build_ground_truth.py       what PII each image contains
 score_run.py                leakage scoring
 vision_score.py             ask Claude what survived
