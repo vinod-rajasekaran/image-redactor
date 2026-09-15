@@ -1629,3 +1629,73 @@ positives" on `Address` labels were not errors. That corpus's `ocr` domain
 annotates only `PERSON_NAME` and `AADHAAR`, so the addresses we found are
 real PII its ground truth omits. Precision measured against incomplete
 truth understates itself.
+
+---
+
+## 2026-09-15 — Re-measured after the cull; VALIDATION.md added
+
+**Status:** Active — corrects figures published earlier today
+
+Two benchmark numbers quoted in `README.md` were **stale**: 76.2% and
+75.6% were measured with nine custom recognizers, and there are now two.
+Re-running both:
+
+| benchmark | before the cull | after |
+|---|---:|---:|
+| IndiaPII-Bench | 76.2% | **67.2%** |
+| maskara | 75.6% | **75.6%** (unchanged — it maps none of the culled entities) |
+
+**The cull cost 9 points on text.** `BANK_ACCOUNT_IN` fell to 0% — 1,142
+spans. That is the measured price of removing `IN_BANK_ACCOUNT`.
+Label-anchored redaction is the intended replacement, but it works on page
+geometry, which a text benchmark cannot exercise, so on text this is a
+straight loss and the recovery on images is **untested**. Recorded rather
+than defended.
+
+### The driving-licence recognizer is not validated, it is lucky
+
+The earlier question — "are the formats clear for `IN_IFSC` and
+`IN_DRIVING_LICENCE`?" — now has an answer from independent data.
+
+- **`IN_IFSC`: 100% on 1,142 examples.** The format is genuinely published
+  (RBI, 11 characters, `0` fixed at position five). It earns its place.
+- **`IN_DRIVING_LICENCE`: 100% on IndiaPII, 0% on maskara.**
+
+Two independent corpora disagree completely. maskara's licences read
+`KL-2009-119628` and `WBBY1990931178` — six-digit serials and four-letter
+prefixes, both of which our pattern forbids, because the pattern was built
+from an example this project invented (`KA05 20230012345`). It matches
+IndiaPII only because that author guessed the same way.
+
+**A recognizer scoring 100% and 0% on two independent corpora has not been
+validated; it has been shown to match one opinion.** It is kept for now
+only because the label mechanism covers the maskara cases anyway — their
+text reads `DL No: TSJB2003555471`, and `DL No` is a label. It should be
+treated as a candidate for the same cull as the other seven.
+
+### Other findings worth recording
+
+- **`IN_AADHAAR` scores 0% on masked Aadhaar numbers** (285 examples) —
+  the `XXXX XXXX 1234` form that appears on documents which are *already*
+  partially redacted.
+- **19% of detections match no labelled PII** (3,159 of 16,619), and 76%
+  of timestamp-shaped decoys are flagged as something. Over-redaction is
+  this project's stated preference, but its cost has never been quantified.
+- **Presidio ships no test data at all.** `presidio-research` is a
+  template-and-Faker generator; the recognizer tests are hardcoded strings.
+  These benchmarks may be the only independent evidence that exists about
+  Presidio's India recognizers.
+
+### VALIDATION.md
+
+Added as a fourth standing document: what is measured, on whose data, and
+what is not. It exists because the honest summary of this project does not
+fit in a headline percentage — the recognizer layer has real independent
+evidence at 67–76%, and the image pipeline has almost none, resting on 20
+documents this project drew and 10 cheques of a single type.
+
+It carries the gap list, the per-recognizer evidence table, the recurring
+failure modes, and one rule learned today: **any new metric must report
+its trivial baseline.** The label benchmark's 100% recall looks like a
+triumph until the control shows that matching every labelled line scores
+the same, because the corpus is 87.6% PII-dense.

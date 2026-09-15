@@ -12,6 +12,8 @@ measurable — the naive answers turned out to be wrong six times.
 > This README describes how the tool works **now**.
 > [DECISIONS.md](DECISIONS.md) is the time-ordered history: every default,
 > the evidence behind it, and the options tried and rejected.
+> [VALIDATION.md](VALIDATION.md) is how far to trust any number here, and
+> what is still unmeasured.
 
 ## Current result
 
@@ -30,7 +32,7 @@ data nobody here produced, the tool scores far lower:
 | data | independent? | result |
 |---|---|---|
 | `documents/` — drawn here | no | 93.5% redacted |
-| IndiaPII-Bench, 2,000 docs | yes | 76.2% recall |
+| IndiaPII-Bench, 2,000 docs | yes | 67.2% recall |
 | maskara, 2,600 docs | yes | 75.6% recall |
 | cheques, 10 images | yes | **0 of 30 regions fully covered** |
 
@@ -42,7 +44,13 @@ coverage 20% for account numbers, 46% for payee names. See
 **Self-generated corpora are no longer used as evidence here.** Two were
 deleted outright in September 2026 after it became clear the recognizers
 and the test data had the same author and agreed with each other rather
-than with reality — see [DECISIONS.md](DECISIONS.md).
+than with reality.
+
+[**VALIDATION.md**](VALIDATION.md) is the standing account of what is
+measured, on whose data, and what is still unmeasured — including the
+gaps that matter most: there is no independent Indian document-image
+corpus, the cheque set is 3% used, and the geometry half of label-anchored
+redaction has never been run against a real page.
 
 ## Setup
 
@@ -312,11 +320,17 @@ detection from OCR entirely:
 python benchmark_indiapii.py
 ```
 
-76.2% recall; the custom recognizers validate at 100%. `PERSON_NAME`
-scores 59%, which is the NER model's real ceiling on varied Indian names.
-Only 3% of its PII-shaped decoys are flagged as the type they mimic — and
-all of those are checksum-invalid Aadhaars, which this tool flags *by
-design*: correct for images, wrong for text.
+**67.2% recall**, down from 76.2% before seven recognizers were removed —
+`IN_BANK_ACCOUNT` alone accounted for 1,142 of its spans. Label-anchored
+redaction is meant to cover those, but it needs page geometry that a text
+benchmark cannot exercise, so on text the removal is a straight loss.
+
+`IN_IFSC` validates at **100%** across 1,142 examples. `IN_AADHAAR`,
+`IN_PAN`, `IN_VOTER`, `IN_PASSPORT` and `IN_GSTIN` score 98–100%, but
+`IN_AADHAAR` scores **0% on masked numbers** (`XXXX XXXX 1234`) and
+`IN_VEHICLE_REGISTRATION` only 31%. Just 4% of PII-shaped decoys are
+flagged as the type they mimic — all checksum-invalid Aadhaars, which this
+tool flags *by design*: correct for images, wrong for text.
 
 And against
 [`maskara-indian-pii-200k`](https://huggingface.co/datasets/somukandula/maskara-indian-pii-200k)

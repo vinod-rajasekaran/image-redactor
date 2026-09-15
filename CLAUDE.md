@@ -15,6 +15,7 @@ as fact.
 | `README.md` | How the tool works **now** | Present tense. No history, no "we used to". Every flag and filename in it must exist — check before committing. |
 | `DECISIONS.md` | Time-ordered history: decision, why, evidence | **Append; never rewrite an entry.** Supersede an old one and mark it `Superseded`. Keep rejected options — they stop the next session re-litigating them. |
 | `CLAUDE.md` | Working guidance for Claude | The traps, the invariants, the things that look wrong but aren't. |
+| `VALIDATION.md` | What is measured, on whose data, and what is not | Update whenever a benchmark is run, a corpus changes, or a gap opens or closes. Every claim in it names its data source and who produced it. |
 
 Update all three when you:
 
