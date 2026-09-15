@@ -131,8 +131,18 @@ it hid an entire family of usable datasets.
 
 #### Usable for the geometry half
 
+A systematic sweep of the HuggingFace **API** — rather than web search,
+which had missed all of these — turned up the strongest candidate:
+**24,000 synthetic Indonesian national ID cards under CC-BY-4.0, with
+per-field bounding boxes carried alongside the text**, plus 109,000
+augmented variants. Its fields map onto an Aadhaar card almost exactly.
+That is the geometry gap closed, pending the work of using it.
+
 | dataset | scale | annotations | licence |
 |---|---|---|---|
+| **cloverx-id/indonesian-id-card-dummy** | 24k flat + 109k augmented | **per-field boxes + text**, synthetic, no real people | **CC-BY-4.0** |
+| **naver-clova-ix/cord-v2** | 1k–10k receipts | key-value field annotations | **CC-BY-4.0** |
+| **DocILE** | 6.7k annotated + 100k synthetic | 55 classes **with localization** | code MIT, dataset gated by request form |
 | **MIDV-500** | 50 document types, 15,000 annotated frames | field quadrangles, document types | source images from Wikimedia Commons, **public domain / open licences**; plain FTP, no gate |
 | **MIDV-2020** | 72,409 images, 1,000 mock IDs | 546 text fields, 48 photo, 40 signature — values *and* positions | **undisclosed**, 124GB behind a form |
 | **DocXPand-25k** | 24,994 images, 9 fictitious ID designs | rich per-field labels, synthetic faces and values | **CC BY-NC-SA 4.0** (its code is MIT) |
