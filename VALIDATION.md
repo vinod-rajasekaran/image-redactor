@@ -111,24 +111,69 @@ evidence that exists about its India recognizers.
 
 ## The gaps
 
-### 1. There is no independent Indian document-image corpus
+### 1. There is no independent Indian **form** corpus that is safe to use
 
-This is the central gap and it is not for want of looking:
+The first version of this section said "there is no independent Indian
+document-image corpus" and treated the search as closed. That was wrong on
+both counts, and the correction matters more than the original claim.
 
-| candidate | why it does not work |
+**The framing error.** The unvalidated half of our approach — the geometry
+that pairs a label to its value — is **locale-independent**. A French ID
+card tests it exactly as well as an Aadhaar card. Searching only for
+*Indian* image data was looking for a constraint that does not apply, and
+it hid an entire family of usable datasets.
+
+#### Usable for the geometry half
+
+| dataset | scale | annotations | licence |
+|---|---|---|---|
+| **MIDV-500** | 50 document types, 15,000 annotated frames | field quadrangles, document types | source images from Wikimedia Commons, **public domain / open licences**; plain FTP, no gate |
+| **MIDV-2020** | 72,409 images, 1,000 mock IDs | 546 text fields, 48 photo, 40 signature — values *and* positions | **undisclosed**, 124GB behind a form |
+| **DocXPand-25k** | 24,994 images, 9 fictitious ID designs | rich per-field labels, synthetic faces and values | **CC BY-NC-SA 4.0** (its code is MIT) |
+| **BID** | 28,800 Brazilian IDs, 8 templates | text regions, OCR | **unstated** in the repository |
+
+All are synthetic or open-licensed mock documents, so none carries real
+personal data. MIDV-500 and MIDV-2020 also span Cyrillic, Greek and
+Chinese fields, which would be the first real test of non-Latin labels.
+
+#### Not usable, and not for licence reasons
+
+| dataset | why not |
+|---|---|
+| **FIR dataset** (TransDocAnalyser) | **real** First Information Reports collected from Indian police stations — real complainants, addresses and case details, with no anonymisation described |
+| Kaggle / Roboflow Aadhaar sets | field-annotated **real Aadhaar cards** |
+
+These are the closest match to what this tool protects, and that is
+precisely the objection. A permissive licence does not make it acceptable
+to process real people's national identity numbers or police reports —
+people who did not consent to being in an ML benchmark — and FIRs carry
+crime-report data about victims and accused persons. **This is an ethics
+constraint, not a licensing one, and it does not expire.**
+
+#### Still not usable, licence
+
+| candidate | why |
 |---|---|
 | IndicDLP (MIT, 121k real Indian pages) | 11 of 12 domains carry no field-PII; publicly scrapeable forms are blank templates; layout boxes only, no text |
-| FUNSD (199 forms, human label→value links) | non-commercial research licence — and it is exactly the right shape |
-| XFUND | CC BY-NC-SA 4.0 |
+| FUNSD (199 forms, human label→value links) | non-commercial research licence, and exactly the right shape |
+| XFUND | CC BY-NC-SA 4.0 — acceptable under current policy, not yet evaluated |
 | LeakageBench (500 images, 11,954 PII annotations) | Data Use Agreement, GDPR/European |
 | nvisycom/synthetic (MIT) | images unimplemented — "only text-bearing formats render" |
 | presidio-research | a generator, no corpus |
 
-The reason is structural: **documents containing real PII are not
-published, and almost nobody builds synthetic replacements.** The cheque
-dataset's own paper is titled *"Open Annotations and Synthetic Data for
-Field Localisation in Indian Bank Cheques"* — released Apache-2.0 because
-the field had nothing.
+**What remains genuinely absent** is an Indian *form* corpus — filled-in
+applications, bills, medical and government forms — that is both annotated
+and safe to use. The structural reason holds: documents containing real
+PII are not published, the ones that leak out are real people's, and
+almost nobody builds synthetic replacements. The cheque dataset's own
+paper is titled *"Open Annotations and Synthetic Data for Field
+Localisation in Indian Bank Cheques"* — released Apache-2.0 because the
+field had nothing. Closing that gap honestly means commissioned or
+consented data, not a better search.
+
+**Repositories swept:** HuggingFace, GitHub, Kaggle, Roboflow Universe,
+Mendeley Data, Zenodo, arXiv. **Not yet swept:** ICDAR/DAS competition
+archives, data.gov.in, Papers-with-Code.
 
 ### 2. The cheque corpus is 3% used
 
