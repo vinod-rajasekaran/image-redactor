@@ -6,10 +6,16 @@ answer to a different question — **how much should you trust any number
 here, and what is still unmeasured?**
 
 The short version: the recognizer layer has real independent evidence and
-scores in the **60–75%** range on it. The image pipeline has almost none,
-because annotated Indian document images with PII do not exist under a
-permissive licence. Every image-level figure rests on either 20 documents
-this project drew itself or 10 cheques of a single document type.
+scores in the **60–75%** range on it. The image pipeline has almost none —
+every image-level figure rests on either 20 documents this project drew
+itself or 10 cheques of a single document type.
+
+That is a gap in work done, not a gap in available data. Non-commercial
+licences are acceptable for corpora used locally and never redistributed,
+which puts several suitable datasets in scope; see
+[the gaps](#1-there-is-no-independent-indian-form-corpus-that-is-safe-to-use).
+What remains genuinely absent is an Indian **form** corpus that is both
+annotated and safe to use.
 
 ---
 
@@ -131,6 +137,16 @@ it hid an entire family of usable datasets.
 | **MIDV-2020** | 72,409 images, 1,000 mock IDs | 546 text fields, 48 photo, 40 signature — values *and* positions | **undisclosed**, 124GB behind a form |
 | **DocXPand-25k** | 24,994 images, 9 fictitious ID designs | rich per-field labels, synthetic faces and values | **CC BY-NC-SA 4.0** (its code is MIT) |
 | **BID** | 28,800 Brazilian IDs, 8 templates | text regions, OCR | **unstated** in the repository |
+| **FUNSD** | 199 real scanned forms | **human-annotated question→answer links** — label paired to value by a person | non-commercial research and educational use |
+| **XFUND** | 7 languages | human key-value form annotations | CC BY-NC-SA 4.0 |
+
+**FUNSD is the closest fit to what is unvalidated here**, and it only came
+into scope when non-commercial licences were accepted for local use. Its
+annotation *is* the thing `labels.py` computes: a person decided which
+value belongs to which label. Nothing else on this list tests the geometry
+that directly. It is English and American, so it tests the mechanism and
+not the lexicon — which is the right division of labour, since the lexicon
+is already measured on Indian data.
 
 All are synthetic or open-licensed mock documents, so none carries real
 personal data. MIDV-500 and MIDV-2020 also span Cyrillic, Greek and
@@ -155,8 +171,7 @@ constraint, not a licensing one, and it does not expire.**
 | candidate | why |
 |---|---|
 | IndicDLP (MIT, 121k real Indian pages) | 11 of 12 domains carry no field-PII; publicly scrapeable forms are blank templates; layout boxes only, no text |
-| FUNSD (199 forms, human label→value links) | non-commercial research licence, and exactly the right shape |
-| XFUND | CC BY-NC-SA 4.0 — acceptable under current policy, not yet evaluated |
+| LeakageBench (500 images, 11,954 PII annotations) | Data Use Agreement, GDPR/European |
 | LeakageBench (500 images, 11,954 PII annotations) | Data Use Agreement, GDPR/European |
 | nvisycom/synthetic (MIT) | images unimplemented — "only text-bearing formats render" |
 | presidio-research | a generator, no corpus |
