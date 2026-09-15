@@ -52,12 +52,27 @@ headline — which `VALIDATION.md` states as a **ceiling on familiar
 material**, because this project drew the documents and then wrote the
 recognizers while looking at them.
 
-**Two caveats on the OpenAI half.** Output ownership is assigned to the
-user but only so far as law allows, and that does not make an image
-copyrightable or guarantee it is free of third-party rights — these
-reproduce official Indian document *layouts* (emblem, banding, seal). They
-are mockups for testing a privacy tool and nothing here is or should be
-presented as an issued record.
+### Redistribution: all of it can be open-sourced
+
+Three different things with three different statuses, and none of them
+blocks distribution:
+
+| part | status | effect |
+|---|---|---|
+| images 01–10 | authored here, by code in this repository | copyrightable, carries this repository's licence |
+| images 11–20, raw output | OpenAI assigns its rights to the user; purely AI-generated output generally **cannot be copyrighted**, since US and international law require human authorship | nobody holds an exclusive right, so nothing restricts redistribution — and equally, we cannot impose terms on the raw output |
+| the annotations, the curation, the collage split | human-authored work | copyrightable, carries this repository's licence |
+
+The practical position: **the corpus is freely usable.** What we authored
+we license; over the raw model output we assert no copyright, which is a
+statement about our rights, not a restriction on yours. Anyone generating
+a similar image independently is free to use theirs.
+
+**One caveat that survives all of that**, and it is not about copyright:
+these reproduce official Indian document *layouts* — emblem, banding,
+seal. They are mockups for testing a privacy tool. Every value on them is
+fabricated, and nothing here is or should be presented as an issued
+record.
 
 ### Deleted, and why
 

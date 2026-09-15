@@ -2,7 +2,7 @@
   "_meta": {
     "description": "20 synthetic Indian documents: 10 rendered by generate_test_images.py, 10 image-model generations (OpenAI) supplied as a collage and split into individual pages.",
     "source": "generate_test_images.py (01-10); OpenAI image generation (11-20)",
-    "licence": "fully synthetic — every name, number and address is fabricated; no real person or real document",
+    "licence": "Fully synthetic — every name, number and address is fabricated; no real person or real document. Freely redistributable: 01-10 and all annotations are authored here and carry this repository's licence; over the raw OpenAI-generated output in 11-20 no copyright is asserted, since purely AI-generated images generally cannot be copyrighted for want of human authorship. See SOURCES.md.",
     "annotation": "text (legibility scoring), hand-labelled then vision-audited",
     "note": "11-20 imitate photographed pages — perspective, glare, low contrast — which is why they are the hardest images here. That is rendered appearance, not a camera.",
     "note_2026_09_15": "expected_type set to null for seven entity types whose recognizers were removed: nothing in the registry produces them any more. Item count and text unchanged — scoring is legibility-based and never read this field."
