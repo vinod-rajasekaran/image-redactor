@@ -33,6 +33,43 @@ the treatment `datasets/text/` already gets.
 
 ---
 
+## Produced by this project
+
+Listed here for the same reason as everything else: provenance rots when
+it is not written down, and this project has already had to correct a
+claim that one of these corpora contained real photographs when it did
+not.
+
+| corpus | licence / terms | verified | purpose |
+|---|---|---|---|
+| `datasets/documents/` images **01–10** | fully synthetic, this repository's licence | **API** (rendered locally by `generate_test_images.py`) | Ten Pillow-rendered Indian documents — Aadhaar, PAN, prescription, passbook, licence, voter ID, insurance, rental. Flat, crisp, no perspective: the easy end of the range, and the regression canary for the OCR-tolerant Aadhaar fallback lives here (`04_hospital_admission_report.png` carries a deliberately checksum-invalid number). |
+| `datasets/documents/` images **11–20** | **OpenAI assigns output rights to the user**, "to the extent permitted by applicable law" — see [Terms of Use](https://openai.com/policies/row-terms-of-use/) | **page** | Ten pages generated with an OpenAI image model, supplied as a collage and split. They *imitate* photographed documents — perspective, glare, low contrast — which makes them the hardest images in the corpus and the source of most known leaks. Every value on them is fabricated. |
+
+**Both halves are fully synthetic**: no real person, document, account or
+photograph. Together they are the 77-item ground truth behind the 93.5%
+headline — which `VALIDATION.md` states as a **ceiling on familiar
+material**, because this project drew the documents and then wrote the
+recognizers while looking at them.
+
+**Two caveats on the OpenAI half.** Output ownership is assigned to the
+user but only so far as law allows, and that does not make an image
+copyrightable or guarantee it is free of third-party rights — these
+reproduce official Indian document *layouts* (emblem, banding, seal). They
+are mockups for testing a privacy tool and nothing here is or should be
+presented as an issued record.
+
+### Deleted, and why
+
+| corpus | why it is gone |
+|---|---|
+| `datasets/pack/` | Synthetic Indian documents generated here from a locally-run generator. Deleted 2026-09-15: the recognizers and the test data had the same author, so its 90% measured agreement with our own inventions. |
+| `datasets/generated/` | 50 photoreal pages from `gpt-image-2`, 224 ground-truth items, 79.0%. Deleted the same day and for the same reason, along with the generator, so no later session could reach for it. |
+
+The findings they produced survive in `DECISIONS.md`; the corpora and the
+machinery do not.
+
+---
+
 ## Datasets that are candidates, not yet used
 
 | dataset | licence | verified | purpose |
