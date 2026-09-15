@@ -50,9 +50,13 @@ than with reality.
 
 [**VALIDATION.md**](VALIDATION.md) is the standing account of what is
 measured, on whose data, and what is still unmeasured — including the
-gaps that matter most: there is no independent Indian document-image
-corpus, the cheque set is 3% used, and the geometry half of label-anchored
-redaction has never been run against a real page.
+gaps that matter most: the cheque set is 3% used, the geometry half of
+label-anchored redaction has never been run against a real page, and no
+Indian **form** corpus exists that is both annotated and safe to use. The
+data that matches that description is real people's documents — real
+police reports, real Aadhaar cards — which a permissive licence does not
+make usable. [**SOURCES.md**](SOURCES.md) records every candidate, its
+licence as checked, and why it was taken or left.
 
 ## Setup
 
