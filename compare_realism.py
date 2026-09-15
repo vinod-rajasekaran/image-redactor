@@ -19,7 +19,7 @@ started to fall. Push past that and the corpus is not harder, only
 blinder.
 
 Usage:
-    python compare_realism.py generated probe_authentic probe_field
+    python compare_realism.py <corpus> [<corpus> ...]
 """
 from __future__ import annotations
 

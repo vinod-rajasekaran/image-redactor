@@ -4,7 +4,8 @@
     "source": "generate_test_images.py (01-10); OpenAI image generation (11-20)",
     "licence": "fully synthetic — every name, number and address is fabricated; no real person or real document",
     "annotation": "text (legibility scoring), hand-labelled then vision-audited",
-    "note": "11-20 imitate photographed pages — perspective, glare, low contrast — which is why they are the hardest images here. That is rendered appearance, not a camera."
+    "note": "11-20 imitate photographed pages — perspective, glare, low contrast — which is why they are the hardest images here. That is rendered appearance, not a camera.",
+    "note_2026_09_15": "expected_type set to null for seven entity types whose recognizers were removed: nothing in the registry produces them any more. Item count and text unchanged — scoring is legibility-based and never read this field."
   },
   "01_aadhaar_card.png": {
     "source": "synthetic",
@@ -188,7 +189,7 @@
       },
       {
         "text": "MH/MED/2011/45892",
-        "expected_type": "IN_MEDICAL_REG",
+        "expected_type": null,
         "field": "Doctor Reg. No.",
         "tier": "core"
       }
@@ -211,7 +212,7 @@
       },
       {
         "text": "0234 5678 9012 345",
-        "expected_type": "IN_BANK_ACCOUNT",
+        "expected_type": null,
         "field": "Account No.",
         "tier": "core"
       },
@@ -310,7 +311,7 @@
     "pii": [
       {
         "text": "NHI/2024/778812",
-        "expected_type": "IN_POLICY_NUMBER",
+        "expected_type": null,
         "field": "Policy No.",
         "tier": "core"
       },
@@ -464,7 +465,7 @@
       },
       {
         "text": "1234567890",
-        "expected_type": "IN_BANK_ACCOUNT",
+        "expected_type": null,
         "field": "Account No.",
         "tier": "core"
       },
@@ -545,7 +546,7 @@
       },
       {
         "text": "AH12345678",
-        "expected_type": "IN_PATIENT_ID",
+        "expected_type": null,
         "field": "UHID",
         "tier": "core"
       },
@@ -611,7 +612,7 @@
     "pii": [
       {
         "text": "50100123456789",
-        "expected_type": "IN_BANK_ACCOUNT",
+        "expected_type": null,
         "field": "Account No.",
         "tier": "core"
       },
@@ -677,7 +678,7 @@
     "pii": [
       {
         "text": "6E3F7K",
-        "expected_type": "IN_PNR",
+        "expected_type": null,
         "field": "PNR",
         "tier": "core"
       },

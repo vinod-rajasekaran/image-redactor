@@ -78,10 +78,10 @@ LABEL_MAP = {
     "Email": ("EMAIL_ADDRESS", "core"),
     "Address": ("LOCATION", "core"),
     "Property Address": ("LOCATION", "core"),
-    "Account No.": ("IN_BANK_ACCOUNT", "core"),
+    "Account No.": (None, "core"),
     "DL No.": ("IN_DRIVING_LICENCE", "core"),
-    "Policy No.": ("IN_POLICY_NUMBER", "core"),
-    "Doctor Reg. No.": ("IN_MEDICAL_REG", "core"),
+    "Policy No.": (None, "core"),
+    "Doctor Reg. No.": (None, "core"),
     "Diagnosis": (None, "sensitive"),
 }
 
@@ -153,7 +153,7 @@ REAL_GROUND_TRUTH = {
     "13_water_bill.png": {
         "pii": [
             p("Priya Sharma", "PERSON", "Customer Name"),
-            p("1234567890", "IN_BANK_ACCOUNT", "Account No."),
+            p("1234567890", None, "Account No."),
             p("12, 3rd Cross Indiranagar Bengaluru - 560038", "LOCATION",
               "Service Address"),
         ],
@@ -178,7 +178,7 @@ REAL_GROUND_TRUTH = {
     "16_lab_test_report.png": {
         "pii": [
             p("Priya Sharma", "PERSON", "Patient Name"),
-            p("AH12345678", "IN_PATIENT_ID", "UHID"),
+            p("AH12345678", None, "UHID"),
             p("Dr. Anitha Reddy", "PERSON", "Consultant Pathologist"),
         ],
         "visual": {"face": 0, "qr_code": 0, "barcode": 0},
@@ -197,7 +197,7 @@ REAL_GROUND_TRUTH = {
     },
     "18_bank_statement.png": {
         "pii": [
-            p("50100123456789", "IN_BANK_ACCOUNT", "Account No."),
+            p("50100123456789", None, "Account No."),
             p("Priya Sharma", "PERSON", "Customer Name"),
         ],
         "visual": {"face": 0, "qr_code": 0, "barcode": 0},
@@ -218,7 +218,7 @@ REAL_GROUND_TRUTH = {
     },
     "20_flight_booking.png": {
         "pii": [
-            p("6E3F7K", "IN_PNR", "PNR"),
+            p("6E3F7K", None, "PNR"),
             p("Priya Sharma", "PERSON", "Passenger Name"),
         ],
         "visual": {"face": 0, "qr_code": 1, "barcode": 0},

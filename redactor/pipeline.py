@@ -110,6 +110,25 @@ def build_engines(
     return image_analyzer, redactor
 
 
+def _labelled_values_for(analyzer, image, factor: int) -> list:
+    """Run the analyzer's own OCR over one variant and locate labelled values.
+
+    Uses `analyzer.ocr` so this cannot drift from the backend, PSM and
+    reading-order wrapper the detection path uses — a second OCR
+    configuration would be a second set of boxes with no way to tell which
+    was right.
+    """
+    import numpy as np
+
+    from .labels import detect_labelled_values
+
+    try:
+        result = analyzer.ocr.perform_ocr(np.asarray(image))
+        return detect_labelled_values(result, scale=factor)
+    except Exception:  # never let this path fail an image
+        return []
+
+
 def process_image(
     path: Path,
     output_dir: Path,
@@ -124,10 +143,12 @@ def process_image(
     variant_union: bool = True,
     style: str = "solid",
     merge_blocks: bool = True,
+    label_anchored: bool = True,
 ) -> ImageResult:
     from PIL import Image
 
     from .detect import detect_visual_pii
+    from .labels import detect_labelled_values
     from .geometry import VisualRegion, merge_same_type_blocks
     from .hygiene import sanitize_for_processing, save_clean
     from .render import redact_regions
@@ -169,8 +190,18 @@ def process_image(
                 if visual_pii
                 else None
             )
+            # Label-anchored boxes come from the same OCR pass the analyzer
+            # runs, read for position rather than for pattern. Shapeless
+            # identifiers — a customer ID, a sample ID, a bare registration
+            # number — have no regex that can find them and are only ever
+            # locatable by where they sit.
+            label_jobs = [
+                pool.submit(_labelled_values_for, analyzer, v, factor)
+                for v in (variants if label_anchored else [])
+            ]
             per_variant = [job.result() for job in text_jobs]
             regions = visual_job.result() if visual_job else []
+            label_regions = [job.result() for job in label_jobs]
     except Exception as exc:
         logger.exception("Analysis failed for %s", path.name)
         return ImageResult(
@@ -209,6 +240,19 @@ def process_image(
     if merge_blocks:
         raw_boxes = merge_same_type_blocks(raw_boxes)
     text_boxes = [VisualRegion("text", *b[1:]) for b in raw_boxes]
+
+    # Unioned with the pattern boxes, not substituted for them: the two
+    # find different things and overlapping rectangles cost nothing.
+    labelled: list = []
+    seen_label_boxes: set[tuple] = set()
+    for found in label_regions:
+        for region in found:
+            key = (region.left, region.top, region.width, region.height)
+            if key in seen_label_boxes:
+                continue
+            seen_label_boxes.add(key)
+            labelled.append(region)
+    text_boxes.extend(labelled)
 
     visual_counts: dict[str, int] = {}
     for r in regions:

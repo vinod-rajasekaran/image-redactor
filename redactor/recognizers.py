@@ -3,6 +3,19 @@
 One source of truth on purpose. Registry building previously existed in
 both the redaction pipeline and the IndiaPII benchmark, which meant a
 recognizer added to one was silently absent from the other's scores.
+
+**Only formats that are actually published live here.** Seven recognizers
+were removed on 2026-09-15 — patient ID, PNR, policy number, medical
+registration, land record, property registration, bank account. Each
+encoded a *shape* for a kind of identifier that has no national format, and
+each shape was invented by this project while writing the very test data it
+was then scored against. Four never fired once across 67 pages, and the
+misses were the variants nobody had thought of (``MRN-458361`` against a
+pattern built for ``AB1234567``). Identifiers with no published format are
+now handled by position instead — see `redactor/labels.py`.
+
+The bar for adding a recognizer here: **cite the published specification.**
+If the format cannot be sourced, it is a label problem, not a pattern one.
 """
 from __future__ import annotations
 
@@ -16,8 +29,15 @@ CONTEXT_DEPENDENT_SCORE = 0.1
 def ifsc_recognizer() -> PatternRecognizer:
     """IFSC: 4 letters, a mandatory '0', then 6 alphanumerics.
 
-    The fixed zero in position five makes this near-unambiguous, so it
-    does not need context to fire.
+    The one custom format here that is genuinely specified: an RBI
+    standard, 11 characters, with position five reserved as '0'. That fixed
+    zero makes it near-unambiguous, so it fires without needing a label.
+    The branch code is usually digits but may contain a letter, hence
+    ``[A-Z0-9]``.
+
+    Identifies a *branch*, not a person — it is redacted because it appears
+    beside account details and narrows who an account belongs to, not
+    because it is personal on its own.
     """
     return PatternRecognizer(
         supported_entity="IN_IFSC",
@@ -28,10 +48,19 @@ def ifsc_recognizer() -> PatternRecognizer:
 
 
 def driving_licence_recognizer() -> PatternRecognizer:
-    """Indian driving licence: 2-letter state, 2-digit RTO, then 11 digits.
+    """Indian driving licence: state code, RTO code, year of issue, serial.
 
-    Written both spaced and unspaced (``KA05 20230012345``,
+    A **convention, not a published standard** — unlike IFSC, no
+    authoritative specification was findable. Secondary sources agree on
+    state + RTO + 4-digit year + 7-digit serial, but disagree on whether
+    the RTO code is two characters or two-to-three, so both are accepted.
+    Written spaced, hyphenated and compact (``KA05 20230012345``,
     ``KA-05-2023-0012345``). Presidio has no IN_DRIVING_LICENCE at all.
+
+    It survives the 2026-09-15 cull because the shape is at least
+    externally attested rather than invented here — but the uncertainty is
+    real, and a miss on an unusual state's numbering should be treated as
+    expected, not surprising.
     """
     return PatternRecognizer(
         supported_entity="IN_DRIVING_LICENCE",
@@ -39,191 +68,25 @@ def driving_licence_recognizer() -> PatternRecognizer:
         patterns=[
             Pattern(
                 "DL spaced or hyphenated",
-                r"\b[A-Z]{2}[-\s]?[0-9]{2}[-\s]?[0-9]{4}[-\s]?[0-9]{7}\b",
+                r"\b[A-Z]{2}[-\s]?[0-9]{2,3}[-\s]?[0-9]{4}[-\s]?[0-9]{7}\b",
                 0.6,
             ),
             Pattern(
-                "DL compact", r"\b[A-Z]{2}[0-9]{2}[-\s]?[0-9]{11}\b", 0.6
+                "DL compact", r"\b[A-Z]{2}[0-9]{2,3}[-\s]?[0-9]{11}\b", 0.6
             ),
         ],
         context=["driving", "licence", "license", "dl no", "transport", "rto"],
     )
 
 
-def bank_account_recognizer() -> PatternRecognizer:
-    """Indian bank account numbers: 9-18 digits, no checksum, no standard.
-
-    Deliberately weak. A bare digit run is not PII, so this only fires
-    beside an account label.
-    """
-    return PatternRecognizer(
-        supported_entity="IN_BANK_ACCOUNT",
-        name="InBankAccountRecognizer",
-        patterns=[
-            Pattern(
-                "account digits",
-                r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{0,6}\b",
-                CONTEXT_DEPENDENT_SCORE,
-            ),
-            Pattern("account digits compact", r"\b\d{9,18}\b",
-                    CONTEXT_DEPENDENT_SCORE),
-        ],
-        context=["account", "acct", "a/c", "passbook", "statement", "holder"],
-    )
-
-
-def uhid_recognizer() -> PatternRecognizer:
-    """Hospital patient identifiers — UHID, MRN, registration numbers.
-
-    No national format exists; each hospital invents one. Matches a
-    generic letters-then-digits token and leans entirely on context.
-    """
-    return PatternRecognizer(
-        supported_entity="IN_PATIENT_ID",
-        name="InPatientIdRecognizer",
-        patterns=[
-            Pattern("UHID", r"\b[A-Z]{1,4}[0-9]{5,12}\b", CONTEXT_DEPENDENT_SCORE)
-        ],
-        context=["uhid", "mrn", "patient", "hospital", "registration", "ip no"],
-    )
-
-
-def pnr_recognizer() -> PatternRecognizer:
-    """Airline/rail PNR: six alphanumerics, or ten digits for IRCTC.
-
-    Six alphanumerics is an extremely common shape, so this is entirely
-    context-driven — it must not fire on ordinary words or codes.
-    """
-    return PatternRecognizer(
-        supported_entity="IN_PNR",
-        name="InPnrRecognizer",
-        patterns=[
-            Pattern("PNR alphanumeric", r"\b(?=[A-Z0-9]*\d)[A-Z0-9]{6}\b",
-                    CONTEXT_DEPENDENT_SCORE),
-            Pattern("PNR IRCTC", r"\b\d{10}\b", CONTEXT_DEPENDENT_SCORE),
-        ],
-        context=["pnr", "booking", "reference", "ticket", "passenger", "flight"],
-    )
-
-
-def policy_number_recognizer() -> PatternRecognizer:
-    """Insurance policy numbers — slash- or hyphen-separated, no standard."""
-    return PatternRecognizer(
-        supported_entity="IN_POLICY_NUMBER",
-        name="InPolicyNumberRecognizer",
-        patterns=[
-            Pattern(
-                "policy number",
-                r"\b[A-Z]{2,6}[/-][A-Z0-9]{2,6}[/-][A-Z0-9]{3,10}\b",
-                0.3,
-            )
-        ],
-        context=["policy", "insurance", "claim", "premium", "insured"],
-    )
-
-
-def medical_registration_recognizer() -> PatternRecognizer:
-    """State medical council registration numbers, e.g. MH/MED/2011/45892."""
-    return PatternRecognizer(
-        supported_entity="IN_MEDICAL_REG",
-        name="InMedicalRegRecognizer",
-        patterns=[
-            Pattern(
-                "medical council reg",
-                r"\b[A-Z]{2}[/-][A-Z]{2,6}[/-][0-9]{4}[/-][0-9]{3,8}\b",
-                0.4,
-            )
-        ],
-        context=["registration", "reg no", "council", "doctor", "mbbs", "md"],
-    )
-
-
-def land_record_recognizer() -> PatternRecognizer:
-    """Survey / khasra / khata numbers — the plot identifier in land records.
-
-    **There is no single format, and this does not pretend to know one.**
-    The same concept is a survey number in the south and west, a khasra in
-    the north, a khesra in the east and a dag in the northeast; ownership
-    records are jamabandi, khatauni, khatian, pahani or a 7/12 extract
-    depending on the state. Writing a shape regex from any one of those
-    would fit whichever state or generator it was copied from and mislead
-    everywhere else.
-
-    So this leans on the labels, which *are* well documented, exactly as
-    IN_BANK_ACCOUNT does — that reached 100% on an independent benchmark
-    without knowing any bank's numbering scheme. A subdivided number like
-    ``123/4A`` is distinctive enough to score higher than a bare digit run,
-    but neither fires without a label nearby.
-    """
-    return PatternRecognizer(
-        supported_entity="IN_LAND_RECORD",
-        name="InLandRecordRecognizer",
-        patterns=[
-            # 123/4A, 45/2 — a plot and its subdivision
-            Pattern("survey no with subdivision", r"\b\d{1,5}/\d{1,4}[A-Za-z]?\b", 0.3),
-            # a bare plot number; only ever meaningful beside its label
-            Pattern("survey no", r"\b\d{2,6}\b", CONTEXT_DEPENDENT_SCORE),
-        ],
-        context=[
-            "survey", "sy no", "khasra", "khesra", "khata", "khatauni",
-            "khewat", "dag", "jamabandi", "patta", "chitta", "pahani",
-            "satbara", "plot", "land", "revenue", "village",
-        ],
-    )
-
-
-def property_registration_recognizer() -> PatternRecognizer:
-    """Sub-registrar document / registration numbers.
-
-    Issued per Sub-Registrar Office, typically a serial and a year, so the
-    scheme varies by office rather than merely by state. Same treatment:
-    a permissive shape, and the label does the work.
-    """
-    return PatternRecognizer(
-        supported_entity="IN_PROPERTY_REGISTRATION",
-        name="InPropertyRegistrationRecognizer",
-        patterns=[
-            # 1234/2021 — serial and year, the most common written form
-            Pattern("doc no / year", r"\b\d{1,6}\s*/\s*(?:19|20)\d{2}\b", 0.3),
-            # A prefix, a year and a serial — but the order of the last
-            # two varies between offices (REG-2026-28726 and REG-28726-2026
-            # are both plausible and neither is canonical), so accept
-            # either rather than fit to whichever example is at hand.
-            Pattern(
-                "sro alphanumeric",
-                r"\b[A-Z]{2,6}[-/](?:(?:19|20)\d{2}[-/]\d{1,7}|\d{1,7}[-/](?:19|20)\d{2})\b",
-                0.3,
-            ),
-        ],
-        context=[
-            "registration", "registered", "sub-registrar", "subregistrar",
-            "sro", "deed", "document", "encumbrance", "conveyance",
-            "sale deed", "property",
-        ],
-    )
-
 CUSTOM_RECOGNIZER_BUILDERS = (
     ifsc_recognizer,
     driving_licence_recognizer,
-    bank_account_recognizer,
-    uhid_recognizer,
-    pnr_recognizer,
-    policy_number_recognizer,
-    medical_registration_recognizer,
-    land_record_recognizer,
-    property_registration_recognizer,
 )
 
 CUSTOM_ENTITIES = (
     "IN_IFSC",
     "IN_DRIVING_LICENCE",
-    "IN_BANK_ACCOUNT",
-    "IN_PATIENT_ID",
-    "IN_PNR",
-    "IN_POLICY_NUMBER",
-    "IN_MEDICAL_REG",
-    "IN_LAND_RECORD",
-    "IN_PROPERTY_REGISTRATION",
 )
 
 

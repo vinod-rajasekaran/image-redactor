@@ -78,6 +78,11 @@ documents), five confirmed leaks, all partial-coverage failures.
   reasons.
 - `hygiene.py`, `runs.py`, `vision.py` — metadata stripping, run folders,
   shared Claude client.
+- `labels.py` — redacts the value *beside* a personal-data label, by
+  geometry, whatever shape it has. This exists because shape-first
+  detection cannot cover identifiers that have no national format, and
+  because every OCR word already carries a box that the text-flattening
+  path was throwing away.
 - `synth.py` — fake Indian field *values*, with no renderer attached. Both
   document generators draw from it, so a flat Pillow page and a photoreal
   one carry identical values and one ground truth serves both.
@@ -86,9 +91,15 @@ documents), five confirmed leaks, all partial-coverage failures.
 together, one schema, loaded through `redactor.datasets.load(name)`.
 **Every corpus is synthetic**, and each one's `_meta` block states its
 source and licence; keep that true of anything added. `documents/` and
-`pack/` are committed. Excluded for size only, not secrecy:
-`cheques/images` (87MB, Apache-2.0, `cheque_benchmark.py` re-fetches it)
-and `text/` (93MB of third-party parquets).
+`cheques/` are committed; `text/` is fetched on demand.
+
+**Do not develop or test against a corpus this project generated.** Two —
+`pack/` and `generated/` — were deleted in September 2026 for exactly that
+reason: the recognizers and the test data had the same author, so they
+agreed with each other and not with reality. `documents/` stays, but it is
+familiar material and its 93.5% is a ceiling, not a measurement. Evidence
+for a change must come from data nobody here produced: the cheque images,
+IndiaPII-Bench, or maskara.
 
 `runs/` and `input_annotations.json` stay gitignored — those describe
 whatever a *user* fed the tool, which is not synthetic and not ours.
@@ -126,9 +137,16 @@ APIs return no box for a code they cannot read — exactly the codes that
 most need covering. This shipped once and was caught only because a
 barcode count stayed at 0.
 
-**The context-scored recognizers depend on reading order.** `IN_BANK_ACCOUNT`,
-`IN_PNR`, `IN_PATIENT_ID` and friends only fire beside their label.
-Re-score after changing OCR backend or PSM.
+**Only published formats get a recognizer.** Seven were removed in
+September 2026 — patient ID, PNR, policy number, medical registration,
+land record, property registration, bank account. Every one encoded a
+*shape* that this project invented while writing the test data it was then
+scored against, and four never fired once across 67 pages. The bar now is:
+**cite the specification**. `IN_IFSC` clears it (RBI, 11 chars, mandatory
+`0` at position five); `IN_DRIVING_LICENCE` only half clears it (a
+convention with sources disagreeing on RTO-code length) and is kept on
+notice. Anything else is a label problem, not a pattern one — see
+`labels.py`.
 
 **Entity counts are a bad metric.** Both misses and false positives move
 them. Two Paddle bugs looked like improvements by that measure. Score

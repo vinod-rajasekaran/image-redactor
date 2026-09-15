@@ -1467,3 +1467,74 @@ is what makes OCR hard; do not chase **security-feature** fidelity —
 holograms, microprint, guilloche, exact VID placement — which adds nothing
 to OCR difficulty and whose only effect is helping a fake pass as genuine.
 The spec will be softened rather than reworded to slip past the filter.
+
+---
+
+## 2026-09-15 — Deleted the self-generated corpora; stopped scoring against our own imagination
+
+**Status:** Active — supersedes *A 50-document photoreal corpus, and 79.0%*
+and every figure measured on `pack/`
+
+`datasets/pack/` and `datasets/generated/` are **deleted**. Both were
+images this project produced, and both were being used as evidence that
+this project's code works.
+
+**The circularity, stated plainly.** The recognizers and the test data had
+the same author. `synth.py` and the pack generator invented formats —
+`MRN-458361`, `MH/MED/2011/45892`, `REG-2026-28726` — and the recognizers
+were regexes fitted to those inventions. They agreed with each other and
+disagreed with reality. The scores follow exactly that split:
+
+| data | whose | score |
+|---|---|---|
+| `documents/` | ours | 93.5% |
+| `pack/` | ours | 90% |
+| `generated/` | ours | 79.0% |
+| IndiaPII-Bench | independent | 76.2% |
+| maskara | independent | 75.6% |
+| cheques | independent | **0/30 regions fully covered** |
+
+Every number above the line was produced by grading homework against its
+own answer key.
+
+**What survives.** `documents/` stays — it is also ours, but it is the
+original corpus, its 77 items were audited by an independent vision pass,
+and its leaks are documented. Its 93.5% is now stated in `README.md` as a
+**ceiling on familiar material, not performance**. `cheques/` and the two
+text benchmarks are the only independent evidence this project holds, and
+they are what a change must be measured on from here.
+
+**Also removed: seven recognizers** — `IN_PATIENT_ID`, `IN_PNR`,
+`IN_POLICY_NUMBER`, `IN_MEDICAL_REG`, `IN_LAND_RECORD`,
+`IN_PROPERTY_REGISTRATION`, `IN_BANK_ACCOUNT`. Each encoded an invented
+shape for an identifier that has no national format. Four never fired once
+across 67 pages, and the misses were the variants nobody had thought of:
+
+    Medical Record No.: MRN-458361   -> nothing  (pattern wanted AB1234567)
+    Reg. No.: MMC/2010/06/12345      -> nothing  (pattern wanted MH/MED/2011/45892)
+    Reg. No. : 63281                 -> nothing  (no shape at all)
+    Customer ID : 100724681          -> nothing  (nobody wrote that one)
+
+**Kept:** `IN_IFSC` — genuinely specified by the RBI, 11 characters with a
+mandatory `0` at position five, which is why it can fire without a label.
+`IN_DRIVING_LICENCE` — kept on notice: the state/RTO/year/serial
+convention is externally attested but no authoritative spec was findable
+and sources disagree on whether the RTO code is two characters or three,
+so both are now accepted. The bar for any future recognizer: **cite the
+published specification**, or treat it as a label problem.
+
+**The replacement is `redactor/labels.py`**, which redacts the value
+*beside* a personal-data label using the OCR geometry, whatever shape the
+value has. Unit-tested on synthetic geometry only; **not yet validated on
+independent data**, and deliberately not validated on the corpora above,
+which is what caused this entry.
+
+**Standing rule, now in `CLAUDE.md`:** do not develop or test against a
+corpus this project generated.
+
+**Known stale, accepted:** `expected_type` in `datasets/documents/
+annotations.json` was nulled for the seven culled types in place rather
+than regenerated, because that file's 77 items are the product of three
+revisions and an independent audit that `build_ground_truth.py` would
+overwrite. Item count and text verified unchanged; scoring is
+legibility-based and never read the field.
