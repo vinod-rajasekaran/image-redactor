@@ -2073,3 +2073,64 @@ keep the union.
 `enable_mkldnn` is Intel x86 and this machine is arm64; and neither
 `enable_mkldnn` nor `cpu_threads` exists in PaddleOCR 3.7's constructor —
 both were 2.x arguments, moved behind a `paddlex` engine config in 3.x.
+
+---
+
+## 2026-09-16 — Auto-escalating the OCR backend: viable per corpus, not per image
+
+**Status:** Investigated, not built — the evidence says what it can and
+cannot do
+
+Since Paddle nearly solves cheques at 25x the cost, the obvious design is
+to detect the hard images and pay only for those. Two candidate signals
+were measured.
+
+**Background statistics do not work.** Mean saturation and white-pixel
+fraction separate *coloured* from *plain*, not *hard* from *easy*:
+
+| corpus | saturation | near-white |
+|---|---:|---:|
+| documents | 0.06 | 86% |
+| cheques — Axis (Tesseract succeeds) | 0.07 | 85% |
+| cheques — Canara (Tesseract fails) | 0.20 | 35% |
+| KTP cards (Tesseract adequate) | 0.34 | **0%** |
+
+KTP cards are the most coloured thing here and Tesseract copes; Axis
+cheques look statistically like plain documents. A threshold that catches
+Canara also catches every KTP card, whose benefit from Paddle is unmeasured.
+
+**OCR confidence separates corpora cleanly and images not at all.**
+
+| corpus | mean confidence | low-confidence tokens |
+|---|---:|---:|
+| documents | 93-95 | 0% |
+| KTP | 72-78 | 17-26% |
+| cheques | 44-72 | 28-68% |
+
+A threshold near 85 routes every cheque to Paddle and leaves every document
+on Tesseract, which is the intended behaviour. **But within the cheques it
+is backwards**: Canara leaks at confidence 64-65 while Axis succeeds at
+55-59. Tesseract reads the guilloche pattern as text and is *confidently
+wrong* — it never sees the label at all, so nothing in its own output
+reports the failure.
+
+**Conclusion.** Escalation can be a document-class decision, not a
+per-image one. A useful rule is "mean OCR confidence below ~85 implies a
+patterned or photographed source, re-run with Paddle", costing one extra
+Tesseract pass (5.2s on a cheque) before the Paddle pass. What it cannot
+do is find the hard page inside an otherwise easy batch.
+
+**Restricting entity types saves little, because OCR dominates.** Measured
+on the 20-document corpus:
+
+| run | per image |
+|---|---:|
+| all entities, visual detection on | 1.00s |
+| three ID entities only | 0.83s |
+| three ID entities, no visual detection | 0.74s |
+
+Naming the entities skips the recognizers that cannot produce them —
+spaCy NER included — for **17%**, and dropping the visual detectors adds
+another 9%. Worth having, and `--entities` already does it, but it cannot
+approach the 25x that the backend choice costs. Time is in OCR, so the
+lever that matters is how many OCR passes run, not how many recognizers.
