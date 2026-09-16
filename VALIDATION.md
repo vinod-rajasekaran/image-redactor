@@ -19,6 +19,13 @@ annotated and safe to use.
 
 ---
 
+## Two rules govern everything below
+
+**Indian data sets the numbers.** Thresholds, tolerances and defaults are
+tuned on `documents/` and `cheques/`. `ktp/` is Indonesian and validates
+the *mechanism* — the label-to-value geometry, which is locale-independent
+— but never the parameters, however much larger it is.
+
 ## The rule that governs everything below
 
 **Evidence must come from data this project did not produce.**

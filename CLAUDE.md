@@ -106,6 +106,16 @@ together, one schema, loaded through `redactor.datasets.load(name)`.
 source and licence; keep that true of anything added. `documents/` and
 `cheques/` are committed; `text/` is fetched on demand.
 
+**Indian data sets the numbers; other corpora only cross-check.**
+`datasets/ktp/` is Indonesian. It earns its place because the label-to-value
+geometry it validates is locale-independent, and because no Indian form
+corpus exists that is both annotated and safe. It must **not** set
+thresholds, tolerances or defaults — those belong to `datasets/documents/`
+and `datasets/cheques/`, which are Indian, even though KTP is the larger
+corpus (180 regions against 77 items) and will look tempting. Use it to
+confirm a change does not regress, never to decide what the change should
+be.
+
 **Do not develop or test against a corpus this project generated.** Two —
 `pack/` and `generated/` — were deleted in September 2026 for exactly that
 reason: the recognizers and the test data had the same author, so they
