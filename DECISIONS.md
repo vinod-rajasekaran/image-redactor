@@ -2040,3 +2040,36 @@ On 2365x1065 cheques that is 22 minutes for ten images.
 loses nothing on printed forms. `--ocr paddle` is the right choice for
 cheques and any document with a patterned or coloured background, and that
 is now a measured recommendation rather than a hunch.
+
+**Speed follow-up — where Paddle's time actually goes.**
+
+Measured on a 2365x1100 cheque, OCR step only:
+
+| config | 3 variants | 1 variant |
+|---|---:|---:|
+| textline orientation on (current) | 127.2s | 49.0s |
+| textline orientation off | 133.9s | 57.6s |
+| + `text_det_limit_side_len=960` | 120.7s | 48.6s |
+
+**Disabling `use_textline_orientation` does nothing** — 5% slower, i.e.
+noise — despite visibly loading a third model (`PP-LCNet_x1_0_textline_ori`)
+in the logs. It is the change that looks most obviously right and is not.
+`text_det_limit_side_len` buys ~5%.
+
+**The three-variant union is the cost**, and it exists for Tesseract's
+benefit: Paddle read `A/c No.` straight off the RGB image where all three
+Tesseract variants failed. End to end on the cheques, `--single-variant`
+takes Paddle from **131.6 to 75.5 s/image (1.7x)** — less than the 2.6x the
+OCR micro-benchmark suggested, because the rest of the pipeline does not
+shrink.
+
+**It is not free.** The three counted PII fields are unchanged (account
+100%, payee 90%, signature 80%), but **MICR coverage falls 100% -> 60%**.
+The MICR line encodes account digits, so covering the A/C box while
+leaving MICR readable leaks the same number by another route. For cheques,
+keep the union.
+
+**Advice from general PaddleOCR speed guides does not transfer here.**
+`enable_mkldnn` is Intel x86 and this machine is arm64; and neither
+`enable_mkldnn` nor `cpu_threads` exists in PaddleOCR 3.7's constructor —
+both were 2.x arguments, moved behind a `paddlex` engine config in 3.x.

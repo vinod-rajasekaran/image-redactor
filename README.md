@@ -161,7 +161,7 @@ demand. Licences and provenance per corpus:
 |------|---------|-------------|
 | `--input` | `input_images` | Folder of images to redact |
 | `--runs-dir` / `--run-name` | `runs` / timestamp | Where this run is written |
-| `--ocr` | `tesseract` | `tesseract`, `paddle` or `rapidocr` |
+| `--ocr` | `tesseract` | `tesseract`, `paddle` or `rapidocr`. Use `paddle` for patterned or coloured backgrounds — see [cheques](#benchmarks) |
 | `--psm` | `4` | Tesseract page-segmentation mode |
 | `--threshold` | `0.4` | Minimum Presidio confidence to redact |
 | `--entities` | all | Restrict to specific entity types |
