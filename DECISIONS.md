@@ -2134,3 +2134,48 @@ spaCy NER included — for **17%**, and dropping the visual detectors adds
 another 9%. Worth having, and `--entities` already does it, but it cannot
 approach the 25x that the backend choice costs. Time is in OCR, so the
 lever that matters is how many OCR passes run, not how many recognizers.
+
+---
+
+## 2026-09-16 — Paddle measured on all three corpora; the escalation case
+
+**Status:** Evidence for `--ocr auto`, not yet built
+
+| corpus | tesseract | paddle | cost |
+|---|---|---|---:|
+| `documents/` (Indian, 20) | 7 leaks, 1.0 s/img | **+2 caught, −1 lost**, 48.2 s/img | 48x |
+| `cheques/` (Indian, 10) | acno 40%, payee 60% | **acno 100%, payee 90%**, 131.6 s/img | 25x |
+| `ktp/` (cross-check) | 45/180 covered | **61/180**, 62.8 s/img | 42x |
+
+**On Indian documents Paddle catches exactly the two leaks predicted** —
+`Priya Sharma` and a phone number, both on `15_job_application_form`,
+which has the lowest OCR confidence of all twenty pages (49.8).
+
+**And it loses one Tesseract found**: `6E3F7K` on the flight booking. That
+is the case for unioning rather than switching. A backend swap trades
+leaks; escalate-and-union keeps both, net +2 with no regression. The
+existing rule — union, never substitute — holds here for a measured
+reason, not an aesthetic one.
+
+**Threshold, from Indian data only.** Mean Tesseract word confidence:
+
+| Indian source | confidence |
+|---|---:|
+| `documents/` 01-10, flat Pillow renders | 91-95 |
+| `documents/` 11-20, photoreal | **49.8-76.7** |
+| `cheques/` | **44-72** |
+
+A threshold near 85 separates synthetically-clean pages from everything
+photographed or patterned. KTP lands at 72-78, consistent, but is a
+cross-check and sets nothing.
+
+**Cost of default-on, measured.** On `documents/`, 10 of 20 pages escalate:
++482s to prevent 2 leaks, about **four minutes per prevented leak**. For a
+user with 200 photographed forms it is 3 minutes to 2.7 hours. That is the
+number to decide against, and it argues for a visible warning and a budget
+cap rather than a silent 25x.
+
+**`14_passport.png` needs an explicit rule**: it reads zero words, so its
+confidence is `nan`. It is a closed passport cover with no PII, where
+escalation buys nothing — but "no words read" is indistinguishable from
+total OCR failure, which is the dangerous case. Escalate on `nan`.
