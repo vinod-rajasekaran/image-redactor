@@ -2179,3 +2179,9 @@ cap rather than a silent 25x.
 confidence is `nan`. It is a closed passport cover with no PII, where
 escalation buys nothing — but "no words read" is indistinguishable from
 total OCR failure, which is the dangerous case. Escalate on `nan`.
+
+**Re-validation on Indian data.** `SAME_ROW_TOLERANCE` 0.6 → 0.3 had been
+checked only against the Indonesian KTP corpus, which is exactly what the
+rule above forbids. Re-run on `documents/`: **0 marginal catches, 0
+regressions**, 70/77 unchanged. The change is safe, but it was validated
+in the wrong order and the check is now recorded.

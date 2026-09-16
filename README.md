@@ -286,7 +286,47 @@ sanitize (EXIF orientation applied, GPS + thumbnail stripped)
 
 Each variant goes through Presidio's analyzer: regex + checksum
 recognizers for IDs, spaCy NER for names and places, plus a context boost
-that depends on OCR emitting each label beside its value.
+that depends on OCR emitting each label beside its value. Label-anchored
+boxes come from the same OCR pass, read for position rather than pattern.
+
+### The OCR backend is the largest single lever
+
+**Tesseract is the default and PaddleOCR is off**, because Tesseract is
+25–48× faster and loses nothing on clean printed pages. That trade
+reverses on anything photographed or patterned:
+
+| corpus | tesseract | `--ocr paddle` | cost |
+|---|---|---|---:|
+| `documents/` — 20 Indian pages | 7 leaks | **2 of them caught**, 1 other lost | 48× |
+| `cheques/` — account number | 40% covered | **100%** | 25× |
+| `cheques/` — payee name | 60% | **90%** | |
+| `cheques/` — MICR line | 60% | **100%** | |
+
+Tesseract cannot read `A/c No.` on a Canara or ICICI security background
+under **any** preprocessing — not RGB, greyscale or CLAHE+Otsu, nor the
+R/G/B, HSV-value and desaturated-ink variants tried since. Paddle reads it
+directly. With no label there is nothing to anchor, which is why six of
+ten account numbers were readable and are now covered.
+
+**When to turn it on:** photographed pages, coloured or patterned
+security backgrounds, cheques. A cheap proxy is Tesseract's own mean word
+confidence — 91–95 on flat synthetic pages, **49.8–76.7** on photoreal
+Indian documents, 44–72 on cheques. Below roughly 85, Paddle is likely to
+pay for itself.
+
+**Two cautions.** Paddle is not strictly better: on the flight booking it
+*loses* a PNR that Tesseract covers, so switching backends trades leaks
+rather than only removing them — running both and unioning is the only way
+to keep everything. And Paddle has two landmines documented in
+`CLAUDE.md`, both of which raise detection counts while lowering actual
+redaction.
+
+Paddle's own speed guides do not help here: `enable_mkldnn` is Intel x86
+and this project runs on arm64, and neither it nor `cpu_threads` exists in
+PaddleOCR 3.7's constructor. The cost is the three-variant union —
+`--single-variant` takes Paddle from 131.6 to 75.5 s/image on cheques, but
+drops MICR coverage from 100% to 60%, and the MICR line encodes account
+digits.
 
 ## Output
 

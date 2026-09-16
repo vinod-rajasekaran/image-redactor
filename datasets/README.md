@@ -15,6 +15,7 @@ is where a script reads it from.
 | corpus | n | tracked | annotation | provenance | licence |
 |---|---:|---|---|---|---|
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
+| `ktp/` | 20 | no | box + text | [`cloverx-id/indonesian-id-card-dummy`](https://huggingface.co/datasets/cloverx-id/indonesian-id-card-dummy), publisher-declared dummy data | CC-BY-4.0 |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
 | `text/` | 2 files, 2.2MB | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
 
@@ -25,6 +26,12 @@ nothing else. maskara adds an `ocr` domain of deliberately corrupted text
 and `hard_negative` decoys, which is how the Aadhaar OCR-tolerance was
 justified and how the PAN spacing gap was pinned on the pattern rather
 than the reader.
+
+`ktp/` is **Indonesian**, and is here because the label-to-value geometry
+it validates is locale-independent while no Indian form corpus exists that
+is both annotated and safe. It is a **cross-check only**: it must not set
+thresholds, tolerances or defaults, however much larger it is than the
+Indian corpora. Fetched by `ktp_benchmark.py`, not committed.
 
 `datasets/.cache/` holds downloads that are not corpora — currently the
 95MB parquet the cheque images unpack from. It used to sit in `text/`,

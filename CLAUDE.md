@@ -65,8 +65,10 @@ A local evaluation harness for Presidio's image redaction, aimed at Indian
 documents. OCR, detection and redaction run on-device. The only network
 call is to Claude, and only for *scoring* — never for redaction.
 
-Current result: **93.5%** of known PII redacted (72/77 across 20
-documents), five confirmed leaks, all partial-coverage failures.
+Current result: **97.2% of core PII redacted** (70/72 across 20
+documents), vision-scored. Five further `sensitive`-tier items — diagnoses
+and medications — need `--medical-ner`, which is off by default; with it
+the overall figure is 97.4% (75/77).
 
 ## Layout
 
@@ -120,7 +122,7 @@ be.
 `pack/` and `generated/` — were deleted in September 2026 for exactly that
 reason: the recognizers and the test data had the same author, so they
 agreed with each other and not with reality. `documents/` stays, but it is
-familiar material and its 93.5% is a ceiling, not a measurement. Evidence
+familiar material and its 97.2% is a ceiling, not a measurement. Evidence
 for a change must come from data nobody here produced: the cheque images,
 IndiaPII-Bench, or maskara.
 

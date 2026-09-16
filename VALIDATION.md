@@ -6,16 +6,21 @@ answer to a different question — **how much should you trust any number
 here, and what is still unmeasured?**
 
 The short version: the recognizer layer has real independent evidence and
-scores in the **60–75%** range on it. The image pipeline has almost none —
-every image-level figure rests on either 20 documents this project drew
-itself or 10 cheques of a single document type.
+scores **76.6%** and **82.7%** on two third-party text corpora. Image-level
+evidence is thinner — 20 documents this project drew, 10 third-party
+cheques, and 20 Indonesian ID cards that validate the geometry but set no
+numbers.
 
-That is a gap in work done, not a gap in available data. Non-commercial
-licences are acceptable for corpora used locally and never redistributed,
-which puts several suitable datasets in scope; see
-[the gaps](#1-there-is-no-independent-indian-form-corpus-that-is-safe-to-use).
 What remains genuinely absent is an Indian **form** corpus that is both
-annotated and safe to use.
+annotated and safe to use. That is a gap in work done as much as in
+available data: non-commercial licences are acceptable for corpora used
+locally and never redistributed, which puts several candidates in scope —
+see [the gaps](#1-there-is-no-independent-indian-form-corpus-that-is-safe-to-use).
+
+**The largest unexploited improvement is a flag, not a fix**: `--ocr paddle`
+is off by default and would cover six of ten cheque account numbers that
+currently leak, at 25–48× the runtime. See
+[gap 5](#5-the-ocr-backend-is-the-largest-unexploited-lever-and-it-is-off).
 
 ---
 
@@ -61,7 +66,7 @@ session could reach for it.
 | recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **76.6% recall** |
 | recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **82.7% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
-| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | **IFSC 100%, payee name 60%, signature 60%, account number 40%** |
+| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | tesseract: IFSC 100%, payee 60%, signature 60%, account 40% · **paddle: account 100%, payee 90%** |
 | label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **44/180 fully covered, vs 12/180 with the mechanism off** |
 
 ### Project-produced evidence, and therefore weaker
@@ -221,7 +226,7 @@ archives, data.gov.in, Papers-with-Code.
 in this repo rests on **10 of them** — 30 regions where 885 were free. The
 cheapest available improvement to the evidence base.
 
-### 3. Label-anchored redaction is half-validated
+### 3. Label-anchored redaction — both halves now measured
 
 `redactor/labels.py` has two halves that fail independently:
 
@@ -233,18 +238,49 @@ cheapest available improvement to the evidence base.
   **12/180 to 44/180**, with per-field gains of +29 to +50 points. The
   sharpest evidence is `religion` (13%→60%) and `blood_type` (62%→91%),
   which no recognizer covers at all — nothing but label-anchoring can
-  redact those. Still unmeasured: Devanagari, handwriting, Indian form
-  conventions.
+  redact those. On Indian cheques it is what covers the account number
+  once the label is legible at all.
 
-### 4. The recognizer cull cost 9 points on text, and the replacement is unproven there
+Still unmeasured: Devanagari, handwriting, Indian form conventions.
 
-Removing `IN_BANK_ACCOUNT` and six others dropped IndiaPII recall from
-**76.2% to 67.2%**, with `BANK_ACCOUNT_IN` falling to 0% — 1,142 items.
-Label-anchoring is meant to cover those, but it needs page geometry, which
-a text benchmark cannot exercise. On text the cull is a pure loss; whether
-images recover it is **untested**.
+### 4. `BANK_ACCOUNT_IN` scores 0% on text, by design
 
-### 5. The vision-model path is unevaluated, and cannot be evaluated here
+Removing `IN_BANK_ACCOUNT` and six other invented-shape recognizers
+dropped IndiaPII recall from 76.2% to 67.2%. Adding eight
+specification-backed recognizers brought it to **76.6%**, above where it
+started — but `BANK_ACCOUNT_IN` is still **0%**, because no national
+format exists and no pattern claims it.
+
+Label-anchoring covers that case **on a page**, which a text benchmark
+cannot exercise: it is `A/c No.` beside the number that triggers it, and
+IndiaPII-Bench has no geometry. So the text figure understates the image
+pipeline for this entity, and the image evidence is the cheque result
+(account number 40% → 100% once the label is legible).
+
+### 5. The OCR backend is the largest unexploited lever, and it is off
+
+`--ocr paddle` is **not the default**, because Tesseract is 25–48× faster
+and loses nothing on clean printed pages. On photographed or patterned
+sources the trade reverses:
+
+| corpus | tesseract | paddle |
+|---|---|---|
+| `documents/` (Indian, 20) | 7 leaks | **2 caught, 1 lost** |
+| `cheques/` account number | 40% | **100%** |
+| `cheques/` payee name | 60% | **90%** |
+| `ktp/` (cross-check) | 45/180 | 61/180 |
+
+**Paddle is not strictly better** — it loses a PNR on the flight booking
+that Tesseract covers. Switching trades leaks; only running both and
+unioning keeps everything, and no such mode is built.
+
+A cheap proxy for when it pays: Tesseract's own mean word confidence,
+91–95 on flat synthetic pages against 49.8–76.7 on photoreal Indian
+documents and 44–72 on cheques. **It is not a failure detector** — Canara
+cheques leak at confidence 64–65 while Axis succeeds at 55–59, because
+Tesseract reads guilloche as text and is confidently wrong.
+
+### 6. The vision-model path is unevaluated, and cannot be evaluated here
 
 `redactor/vlm.py` is shipped, tested and **off by default**. What is known:
 
@@ -261,7 +297,7 @@ idea, and the single box it produced was accurate and tightly placed.
 Re-test on a machine that can hold a 7B model before drawing any
 conclusion about whether this replaces or supplements the OCR path.
 
-### 6. Untested entirely
+### 7. Untested entirely
 
 - **Devanagari and other Indic scripts.** Both text corpora are Latin. The
   lexicon carries Devanagari terms that no benchmark exercises.
