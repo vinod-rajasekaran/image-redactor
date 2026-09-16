@@ -13,9 +13,16 @@ Three numbers decide it, and the third is the one usually skipped:
 - **regressions** — items the baseline covered and the candidate leaked.
   Unioning boxes should make this impossible; if it is not zero, something
   is wrong and the run is not a straight improvement.
+
 - **cost per marginal catch** — wall-clock seconds spent per leak actually
   prevented. A pass that catches two more items for twenty minutes is a
   different proposition from one that catches two for twenty seconds.
+
+**A difference of one item is noise.** The pipeline is deterministic —
+byte-identical redacted images across runs of the same config — but the
+vision scorer is not. Scoring the same 20 images twice, 1 of 77 verdicts
+flipped, on a partially-covered address that is genuinely borderline. Treat
+a single marginal catch or regression as unresolved until it reproduces.
 
 Usage:
     python evaluate_redactor.py --input <images> --run-name base
@@ -111,6 +118,13 @@ def main() -> None:
     table.add_row("seconds / image", f"{base_time / images:.1f}",
                   f"{cand_time / images:.1f}")
     console.print(table)
+
+    if 0 < len(caught) + len(regressed) <= 1:
+        console.print(
+            "\n[yellow]Only one item differs, which is within the scorer's "
+            "noise floor (1 of 77 verdicts flipped between two scorings of "
+            "identical images). Re-score before believing it.[/yellow]"
+        )
 
     console.print(
         f"\n[bold green]Marginal catch: {len(caught)}[/bold green] "

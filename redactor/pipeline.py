@@ -16,11 +16,24 @@ from pathlib import Path
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 
-# Tesseract reads small photographed documents poorly; upscaling before OCR
-# recovers text it otherwise misses entirely. Narrower inputs than this get
-# scaled up toward it (integer factor, capped) purely for the OCR pass.
-AUTO_UPSCALE_TARGET_WIDTH = 600
+# Tesseract reads small text poorly, and its own guidance is about
+# **character height**, not image size: capitals should be roughly 30px.
+# An earlier rule here targeted a 600px image width, which is a proxy for
+# nothing — a 2000px scan of 8px text would be left alone while a 300px
+# crop of large type would be tripled.
+#
+# Text height is estimated from connected components rather than a probe
+# OCR pass, which would double the cost of the thing being optimised.
+AUTO_UPSCALE_TARGET_TEXT_HEIGHT = 24
 AUTO_UPSCALE_MAX_FACTOR = 3
+
+# Upscaling an image that is already large makes things worse, not better.
+# Tripling a 2365px cheque produces a 7095px image and Tesseract reads it
+# *less* well: measured, the MICR line went from 60% covered to 0%, and the
+# account number from 40% to 30%. Small text on a big page is a property of
+# a dense document, and the fix for that is a better backend, not more
+# pixels. Cap the result rather than the factor.
+AUTO_UPSCALE_MAX_LONG_SIDE = 2400
 
 
 @dataclass
@@ -37,12 +50,55 @@ class ImageResult:
     decodable_codes: list[str] = field(default_factory=list)
 
 
-def resolve_upscale_factor(width: int, setting: str) -> int:
-    """Pick the OCR upscale factor for an image of this width."""
+def estimate_text_height(image) -> int:
+    """Median height of the text-like connected components, in pixels.
+
+    Cheap stand-in for "how tall are the characters": binarise, take
+    connected components, keep the ones shaped like glyphs, and report the
+    median height. Returns 0 when nothing text-like is found, which the
+    caller treats as "leave it alone" — a blank or purely pictorial page
+    gains nothing from upscaling.
+    """
+    import cv2
+    import numpy as np
+
+    grey = np.asarray(image.convert("L"))
+    binary = cv2.threshold(
+        grey, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )[1]
+    count, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    page_height = grey.shape[0]
+    heights = [
+        stats[i, cv2.CC_STAT_HEIGHT]
+        for i in range(1, count)
+        # Glyph-shaped: taller than noise, shorter than a rule or border,
+        # and not absurdly wide for its height (which is a line, not a letter).
+        if 4 <= stats[i, cv2.CC_STAT_HEIGHT] <= page_height * 0.1
+        and stats[i, cv2.CC_STAT_WIDTH] <= stats[i, cv2.CC_STAT_HEIGHT] * 6
+    ]
+    return int(np.median(heights)) if len(heights) >= 20 else 0
+
+
+def resolve_upscale_factor(image_or_width, setting: str) -> int:
+    """Pick the OCR upscale factor, aiming at a readable character height.
+
+    Accepts a PIL image; an integer width is still accepted so older calls
+    and tests keep working, and falls back to leaving the image alone,
+    since width alone cannot say how tall the text is.
+    """
     if setting != "auto":
         return int(setting)
-    factor = round(AUTO_UPSCALE_TARGET_WIDTH / width) if width else 1
-    return max(1, min(AUTO_UPSCALE_MAX_FACTOR, factor))
+    if isinstance(image_or_width, int):
+        return 1
+    height = estimate_text_height(image_or_width)
+    if height <= 0:
+        return 1
+    factor = round(AUTO_UPSCALE_TARGET_TEXT_HEIGHT / height)
+    factor = max(1, min(AUTO_UPSCALE_MAX_FACTOR, factor))
+    long_side = max(image_or_width.width, image_or_width.height)
+    while factor > 1 and long_side * factor > AUTO_UPSCALE_MAX_LONG_SIDE:
+        factor -= 1
+    return factor
 
 
 def check_prerequisites(logger: logging.Logger, ocr_backend: str = "tesseract") -> None:
@@ -192,7 +248,7 @@ def process_image(
             duration_seconds=time.monotonic() - start,
         )
 
-    factor = resolve_upscale_factor(image.width, upscale)
+    factor = resolve_upscale_factor(image, upscale)
     variants = build_ocr_variants(image, factor, union=variant_union)
 
     # Text variants and the visual detectors are independent, so they run

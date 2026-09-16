@@ -2237,3 +2237,49 @@ targets image width, when the guidance is about character height. It
 happens to give sensible factors here — 2x for the ~300px photoreal crops,
 1x for the 900px renders — but for the wrong reason, and it will mislead on
 a large scan of small text.
+
+---
+
+## 2026-09-16 — Upscale targets character height; and the scorer has a noise floor
+
+**Status:** Active — `AUTO_UPSCALE_TARGET_TEXT_HEIGHT`, replacing
+`AUTO_UPSCALE_TARGET_WIDTH`
+
+**The rule was measuring the wrong thing.** Tesseract's guidance is about
+character height; ours targeted a 600px image width, which is a proxy for
+nothing. A 2365px cheque with 5px text was left at 1x while a 300px crop of
+larger type was doubled.
+
+`estimate_text_height()` now measures the median height of text-shaped
+connected components — cheap CV, no probe OCR pass, which would double the
+cost of the thing being optimised — and the factor aims for **24px**.
+
+**Result on `documents/`: 7 leaks → 5.** Two marginal catches, a phone
+number and a medication, with the one remaining core leak a name.
+`documents/` core moves 97.2% → 98.6%. `ktp/` improves 45 → 50 regions
+fully covered. And it is *faster*, 1.1 → 0.7 s/image, because several pages
+now resolve to a lower factor than the width rule gave them.
+
+**A ceiling was needed, and the cheques found it.** Targeting height alone
+sent the 2365px cheques to 3x — a 7095px image — and Tesseract read them
+**worse**: MICR coverage 60% → **0%**, account number 40% → 30%, payee 60%
+→ 50%. Small text on a large page is a property of a dense document, and
+the fix for that is a better backend, not more pixels.
+`AUTO_UPSCALE_MAX_LONG_SIDE = 2400` caps the result rather than the factor,
+which restores cheque behaviour exactly while keeping the document gain.
+
+### The scorer is not deterministic, and that sets a floor under every figure
+
+Two runs of the same configuration produced 5 leaks and then 6. The
+**pipeline is deterministic** — all 20 redacted images byte-identical
+across runs — so the variance is in `vision_score.py`.
+
+Measured directly: scoring the same images twice, **1 of 77 verdicts
+flipped** — a partially-covered address, genuinely borderline. So the
+headline metric carries roughly **±1.3%**, and *a difference of one item
+is not a result*. The "1 regression" reported for this change earlier in
+the session was that flip, not a real loss.
+
+`compare_runs.py` now says so in its docstring and warns when a comparison
+turns on a single item. Every A/B in this file with a margin of one should
+be read with that in mind.

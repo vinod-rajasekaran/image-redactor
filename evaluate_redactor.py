@@ -32,7 +32,7 @@ from rich.table import Table
 
 from redactor.ocr import OCR_BACKENDS, TESSERACT_PSM_MODES
 from redactor.pipeline import (
-    AUTO_UPSCALE_TARGET_WIDTH,
+    AUTO_UPSCALE_TARGET_TEXT_HEIGHT,
     SUPPORTED_EXTENSIONS,
     ImageResult,
     build_engines,
@@ -265,9 +265,10 @@ def main() -> None:
         default="auto",
         choices=["auto", "1", "2", "3", "4"],
         help=(
-            "Upscale factor applied before OCR only (output keeps the original "
-            "size). 'auto' scales narrow images toward %dpx wide; '1' disables"
-            % AUTO_UPSCALE_TARGET_WIDTH
+            "Upscale factor applied before OCR only (output keeps the "
+            "original size). 'auto' scales so text is about %dpx tall, which "
+            "is what Tesseract's accuracy depends on; '1' disables"
+            % AUTO_UPSCALE_TARGET_TEXT_HEIGHT
         ),
     )
     parser.add_argument(
