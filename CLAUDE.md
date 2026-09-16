@@ -19,6 +19,12 @@ as fact.
 | `LICENSE` | MIT, Project Tech4Dev | Covers the code and everything authored here. Data terms are per corpus in `SOURCES.md`, because they differ. |
 | `SOURCES.md` | Every dataset and model: licence as checked, link, and purpose | Add the row **before** using a source. Record how the licence was verified — API, page, or search — because those are different strengths of claim. Keep rejections; ethics rejections never expire. |
 
+**`python check_docs.py` enforces the first two rows** — run it before a
+push. It catches what a diff cannot: a README sentence that has drifted
+into narrating history ("was tested", "no longer", "previously", a date), a
+filename or anchor that no longer resolves, and a script that exists but is
+undocumented. `DECISIONS.md` is exempt from the tense rule by design.
+
 Update all three when you:
 
 - change a default, or the evidence behind one

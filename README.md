@@ -303,8 +303,8 @@ corpus ships boxes drawn by its publishers.
 
 ## Why the defaults are what they are
 
-Every default was chosen against measured evidence, and several are
-deliberately *not* the obvious choice.
+Every default rests on measured evidence, and several are deliberately
+*not* the obvious choice.
 
 | Default | Why not the obvious choice | What it buys |
 |---|---|---|
@@ -453,7 +453,7 @@ want a larger slice.
 
 Because these boxes are trustworthy, this is the one place *coverage* is a
 meaningful metric — the same measurement computed from vision-generated
-boxes was removed for being off by about a text row.
+boxes is unusable, being off by about a text row.
 
 **Recognizers**, against
 [IndiaPII-Bench](https://huggingface.co/datasets/maskflow-ai/indiapii-bench)
@@ -464,10 +464,12 @@ detection from OCR entirely:
 python benchmark_indiapii.py
 ```
 
-**67.2% recall**, down from 76.2% before seven recognizers were removed —
-`IN_BANK_ACCOUNT` alone accounted for 1,142 of its spans. Label-anchored
-redaction is meant to cover those, but it needs page geometry that a text
-benchmark cannot exercise, so on text the removal is a straight loss.
+**67.2% recall.** Only two custom recognizers remain — see
+[why the defaults are what they are](#why-the-defaults-are-what-they-are) —
+and `BANK_ACCOUNT_IN` scores 0% because no pattern claims it.
+Label-anchored redaction covers that case on a page, but it needs geometry
+a text benchmark cannot exercise, so this number understates what the
+image pipeline does.
 
 `IN_IFSC` validates at **100%** across 1,142 examples. `IN_AADHAAR`,
 `IN_PAN`, `IN_VOTER`, `IN_PASSPORT` and `IN_GSTIN` score 98–100%, but
@@ -557,6 +559,7 @@ ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
 compare_runs.py             diff two scored runs: marginal catch vs cost
 test_labels.py              label geometry, hand-built OCR
 test_vlm.py                 vision-model reply parsing
+check_docs.py               README present tense + references resolve
 test_metadata_stripping.py  regression guard for EXIF stripping
 setup.sh                    one-time environment setup
 DECISIONS.md                why everything is the way it is
