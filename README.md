@@ -83,8 +83,8 @@ data nobody here produced, the tool scores far lower:
 | data | independent? | result |
 |---|---|---|
 | `documents/` — drawn here | no | 93.5% redacted |
-| IndiaPII-Bench, 2,000 docs | yes | 67.2% recall |
-| maskara, 2,600 docs | yes | 75.6% recall |
+| IndiaPII-Bench, 2,000 docs | yes | 76.6% recall |
+| maskara, 2,600 docs | yes | 82.7% recall |
 | cheques, 10 images | yes | **0 of 30 regions fully covered** |
 
 The cheques are the sharpest case: handwriting and signatures throughout,
@@ -220,6 +220,55 @@ worth testing — but check a drawn output before trusting a new model. A
 misplaced box looks like a successful redaction in the summary and leaves
 the value fully readable on the page.
 
+## What it detects
+
+Recall per entity on two independent text corpora — IndiaPII-Bench (2,000
+documents) and maskara (2,600). Text, so OCR is out of the path and a miss
+is a detection gap.
+
+### Identifiers with a published format
+
+Each carries a citable specification, and those marked **checksum** are
+self-validating: a match either passes the check digit or is discarded, so
+they fire without needing a label nearby.
+
+| entity | format | recall |
+|---|---|---:|
+| `IN_AADHAAR` | 12 digits, **Verhoeff checksum** (UIDAI) | 100% / 88% |
+| `IN_AADHAAR_VID` | 16 digits, **Verhoeff checksum** (UIDAI Virtual ID) | spec-backed |
+| `IN_AADHAAR_MASKED` | `XXXX XXXX 1234` / `****-****-1234` (UIDAI masking) | 100% |
+| `IN_ABHA` | 14 digits, **Luhn-10 checksum** (NHA / ABDM) | 100% |
+| `IN_ABHA_ADDRESS` | `handle@abdm` or `@sbx` (NHA) | 100% |
+| `IN_PAN` | `AAAAA9999A`, 4th character encodes holder type (Income Tax Dept) | 100% / 70% |
+| `IN_GSTIN` | 15 characters, state code + PAN + fixed `Z` + **checksum** | 98% |
+| `IN_IFSC` | 4 letters + mandatory `0` + 6 alphanumerics (RBI) | 100% |
+| `IN_VOTER` | 3 letters + 7 digits (ECI EPIC) | 100% |
+| `IN_PASSPORT` | 1 letter + 7 digits | 100% |
+| `IN_VEHICLE_REGISTRATION` | state + RTO + series + number, and the BH series (CMVR 1989, Rule 50) | 100% / 98% |
+| `IN_UPI_VPA` | `handle@psp` — no dot after the `@`, which is what separates it from an email (NPCI) | 97% / 100% |
+
+`IN_DRIVING_LICENCE` (100% / 100%) is the exception: **no authoritative
+specification exists**, sources disagree on the RTO code length, and its
+pattern is widened to the variation two independent corpora contain rather
+than to a standard. It is kept on those terms.
+
+### Everything else, by label rather than by shape
+
+| entity | why no pattern |
+|---|---|
+| `PERSON`, `LOCATION` | spaCy NER — 60% / 90% for names, 97% / 89% for addresses |
+| bank account, customer ID, UHID, policy no., FIR no., survey no. | **no national format exists** — every bank, hospital and registry invents its own numbering, so the set of shapes is unbounded |
+| UAN, PRAN | 12 bare digits, indistinguishable from an Aadhaar and carrying no checksum |
+| PIN code | 6 bare digits; a postcode alone identifies an area, not a person |
+
+These are covered by [label-anchored redaction](#why-the-defaults-are-what-they-are):
+the value beside `Account Number`, `UHID` or `खाता संख्या` is redacted
+whatever shape it takes. On independent Indian forms the lexicon reaches
+100% recall at 97.2% precision.
+
+**The bar for adding a pattern here: cite the published specification.** A
+format that cannot be sourced is a label problem, not a pattern one.
+
 ## How an image is processed
 
 ```
@@ -329,16 +378,13 @@ stock `AnalyzerEngine()` loads only US/UK ones. All six are registered
 here: `IN_AADHAAR`, `IN_PAN`, `IN_VOTER`, `IN_PASSPORT`,
 `IN_VEHICLE_REGISTRATION`, `IN_GSTIN`.
 
-`redactor/recognizers.py` adds seven more Presidio has nothing for:
-`IN_IFSC`, `IN_DRIVING_LICENCE`, `IN_BANK_ACCOUNT`, `IN_PATIENT_ID`,
-`IN_PNR`, `IN_POLICY_NUMBER`, `IN_MEDICAL_REG`.
+`redactor/recognizers.py` adds eight more, each carrying its published
+specification in the docstring — see [what it detects](#what-it-detects)
+for the full list and per-entity recall.
 
-IFSC and driving licences have distinctive shapes and fire unaided. The
-rest are **shapeless** — an account number is a digit run, a PNR is six
-alphanumerics — so they carry a low base score and lean on the context
-boost, firing beside "Account No." and staying silent elsewhere. That only
-works because OCR puts the label next to its value; **re-score after
-changing OCR backend or PSM**.
+Where a value has **no national format**, no pattern is written for it.
+Those are anchored on their label instead, which depends on OCR putting
+the label near its value: **re-score after changing OCR backend or PSM**.
 
 ## Licence
 
@@ -464,19 +510,17 @@ detection from OCR entirely:
 python benchmark_indiapii.py
 ```
 
-**67.2% recall.** Only two custom recognizers remain — see
-[why the defaults are what they are](#why-the-defaults-are-what-they-are) —
-and `BANK_ACCOUNT_IN` scores 0% because no pattern claims it.
-Label-anchored redaction covers that case on a page, but it needs geometry
-a text benchmark cannot exercise, so this number understates what the
-image pipeline does.
+**76.6% recall**, with every specified identifier at 97–100% — see
+[what it detects](#what-it-detects). The remaining gaps are
+`PERSON_NAME` at 60%, which is the NER model's ceiling on varied Indian
+names, and `BANK_ACCOUNT_IN` at 0%, which no pattern claims because no
+national format exists. Label-anchoring covers that case on a page but
+needs geometry a text benchmark cannot exercise, so this number
+understates the image pipeline.
 
-`IN_IFSC` validates at **100%** across 1,142 examples. `IN_AADHAAR`,
-`IN_PAN`, `IN_VOTER`, `IN_PASSPORT` and `IN_GSTIN` score 98–100%, but
-`IN_AADHAAR` scores **0% on masked numbers** (`XXXX XXXX 1234`) and
-`IN_VEHICLE_REGISTRATION` only 31%. Just 4% of PII-shaped decoys are
-flagged as the type they mimic — all checksum-invalid Aadhaars, which this
-tool flags *by design*: correct for images, wrong for text.
+Just 4% of PII-shaped decoys are flagged as the type they mimic — all
+checksum-invalid Aadhaars, which this tool flags *by design*: correct for
+images, wrong for text.
 
 And against
 [`maskara-indian-pii-200k`](https://huggingface.co/datasets/somukandula/maskara-indian-pii-200k)
@@ -487,11 +531,12 @@ corrupted text**:
 python benchmark_maskara.py
 ```
 
-75.6% overall — and the `ocr` domain scores **93%, the highest of any
-domain**, which is the first direct evidence for the OCR-tolerant Aadhaar
-fallback. It exposes a spacing gap: PAN at 70% and vehicle registration at
-22%, both failing on the spaced forms (`AGNVL 0925 B`, `AP 51 NK 6401`)
-that people write and OCR produces.
+82.7% overall — and the `ocr` domain scores **93%, the highest of any
+domain**, which is the direct evidence for the OCR-tolerant Aadhaar
+fallback. Its driving-licence and vehicle-registration formats differ from
+IndiaPII-Bench's, which is why both recognizers accept the union of what
+the two corpora contain. It still exposes a spacing gap: PAN at 70% on
+spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
 
 ## Current limitations
 

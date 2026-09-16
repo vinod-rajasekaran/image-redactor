@@ -42,7 +42,7 @@ LABEL_TO_OURS = {
     "IFSC": {"IN_IFSC"},
     "PAN": {"IN_PAN"},
     "AADHAAR": {"IN_AADHAAR"},
-    "AADHAAR_MASKED": {"IN_AADHAAR"},
+    "AADHAAR_MASKED": {"IN_AADHAAR", "IN_AADHAAR_MASKED"},
     "VEHICLE_REG": {"IN_VEHICLE_REGISTRATION"},
     "DRIVING_LICENCE": {"IN_DRIVING_LICENCE"},
     "VOTER_ID": {"IN_VOTER"},
@@ -50,9 +50,9 @@ LABEL_TO_OURS = {
     "INDIAN_PASSPORT": {"IN_PASSPORT"},
     # No recognizer of ours claims these at all.
     "PIN_CODE": set(),
-    "UPI_VPA": set(),
-    "ABHA_NUMBER": set(),
-    "ABHA_ADDRESS": set(),
+    "UPI_VPA": {"IN_UPI_VPA"},
+    "ABHA_NUMBER": {"IN_ABHA"},
+    "ABHA_ADDRESS": {"IN_ABHA_ADDRESS"},
 }
 
 

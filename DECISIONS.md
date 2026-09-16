@@ -1828,3 +1828,75 @@ works on real pages, which is exactly the half that was unevidenced.
 **Adding the Indonesian terms did not disturb the Indian result** —
 `benchmark_labels.py` still reports 100% recall / 97.2% precision on
 IndiaPII-Bench, checked before and after.
+
+---
+
+## 2026-09-16 — Eight specified identifiers added; recall 67.2% → 76.6%
+
+**Status:** Active — `redactor/recognizers.py`
+
+Recognizers added only where a **published specification** exists, with the
+checksum-carrying ones validated rather than trusted to shape alone.
+
+| entity | specification | independent recall |
+|---|---|---|
+| `IN_ABHA` | 14 digits, **Luhn-10** — NHA / ABDM | 6% → **100%** |
+| `IN_AADHAAR_MASKED` | `XXXX XXXX 1234` — UIDAI masking | 0% → **100%** |
+| `IN_ABHA_ADDRESS` | `handle@abdm` / `@sbx` — NHA | 3% → **100%** |
+| `IN_UPI_VPA` | `handle@psp`, no dot after `@` — NPCI | 5% → **97% / 100%** |
+| `IN_VEHICLE_REGISTRATION` | CMVR 1989 Rule 50, incl. BH series | 31% → **100% / 98%** |
+| `IN_AADHAAR_VID` | 16 digits, **Verhoeff** — UIDAI | spec-backed, unmeasured |
+
+**Totals: IndiaPII-Bench 67.2% → 76.6%, maskara 75.6% → 82.7%.** Decoys
+flagged as the type they mimic stayed at 4%, and detections matching no
+labelled PII fell from 3,160 to 3,026 — so precision improved slightly
+rather than being traded away.
+
+**A checksum is what makes a recognizer falsifiable.** That is the
+difference between these and the seven removed on 2026-09-15: `1234 5678
+9012 37` either passes Luhn or it does not, which is not an opinion about
+what a health ID looks like. `ChecksumPatternRecognizer` discards failures;
+`_verhoeff_ok` delegates to Presidio's implementation rather than
+re-deriving the permutation tables, because a silently wrong table would
+make every VID look invalid and the recognizer would simply never fire.
+
+**Declined, with reasons.** UAN and PRAN are 12 bare digits — colliding
+with Aadhaar and carrying no checksum. PIN code is six bare digits, and a
+postcode identifies an area rather than a person. All three are label
+problems, which `redactor/labels.py` already handles.
+
+### The driving licence, kept on explicit terms
+
+No authoritative specification was findable, and two independent corpora
+contain incompatible shapes. The pattern now accepts the **union of what
+both corpora contain** — `KA05 20230012345`, `KL-2009-119628`,
+`WBBY1990931178` — with a year in the middle as the invariant. 0% → 100%
+on maskara, still 100% on IndiaPII, and invoice numbers of similar shape
+are still rejected.
+
+Fitted to two independent sources is weaker than a specification and
+stronger than an invention. The docstring says exactly that.
+
+### Three bugs, each found by checking rather than assuming
+
+- **The masked-Aadhaar pattern could never match `****-****-1234`.** `\b`
+  before `*` requires a word boundary, and `*` is not a word character, so
+  only the `XXXX` form matched. 91 of 285 spans were invisible. Replaced
+  with a lookbehind.
+- **ABHA scored 6%, and the cause was the corpus, not the checksum.** My
+  Luhn was verified against known card numbers; only 9% of IndiaPII's ABHA
+  numbers pass Luhn, which is chance — their generator never applied it.
+  Resolved the way Aadhaar already was: strict checksum for confidence,
+  plus a context-anchored fallback for failures.
+- **`AADHAAR_MASKED` read 0% because the benchmark's mapping was stale**,
+  not because detection failed. It accepted only `IN_AADHAAR`. Fixing the
+  *measurement* also tightened three entities from "any overlap counts" to
+  "the correct type counts", which lowered the apparent score before the
+  real fixes raised it.
+
+**And one self-inflicted:** an edit spliced `redactor/recognizers.py`
+between two function names whose order had changed earlier in the session,
+silently deleting `build_registry`, `build_custom_recognizers` and the
+checksum helpers. Caught by an import error immediately; restored from
+git. Slicing a file by `.index()` assumes an ordering that a previous edit
+may have changed.

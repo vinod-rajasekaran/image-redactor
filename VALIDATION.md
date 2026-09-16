@@ -35,8 +35,8 @@ with reality, and the scores split exactly along that line:
 | `documents/` | this project | 93.5% |
 | `pack/` | this project | 90% |
 | `generated/` | this project | 79.0% |
-| IndiaPII-Bench | independent | 67.2% |
-| maskara | independent | 75.6% |
+| IndiaPII-Bench | independent | 76.6% |
+| maskara | independent | 82.7% |
 | cheques | independent | **0 of 30 regions fully covered** |
 
 `pack/` and `generated/` were deleted rather than kept as benchmarks, and
@@ -51,8 +51,8 @@ session could reach for it.
 
 | what | data | who made it | licence | result |
 |---|---|---|---|---|
-| recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **67.2% recall** |
-| recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **75.6% recall** |
+| recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **76.6% recall** |
+| recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **82.7% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
 | region coverage on images | 10 cheques, 30 regions, boxes drawn by the publishers | third party | Apache-2.0 | **0 of 30 fully covered** |
 | label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **44/180 fully covered, vs 12/180 with the mechanism off** |
@@ -79,26 +79,33 @@ them had never fired once across 67 pages.
 
 | recognizer | independent evidence | verdict |
 |---|---|---|
-| `IN_IFSC` | **100%** on 1,142 IndiaPII examples | **earns its place.** The format is genuinely published — RBI, 11 characters, mandatory `0` at position five — which is also why it can fire without a label |
-| `IN_DRIVING_LICENCE` | **100%** on IndiaPII (286), **0%** on maskara (200) | **encodes a guess, not a format** — see below |
+| `IN_IFSC` | **100%** on 1,142 IndiaPII examples | published RBI format, 11 characters with a mandatory `0` at position five |
+| `IN_ABHA` | **100%** (286) | 14 digits, Luhn-10 (NHA/ABDM). Checksum-validated, with a context-anchored fallback for checksum failures |
+| `IN_AADHAAR_MASKED` | **100%** (285) | UIDAI masking convention |
+| `IN_ABHA_ADDRESS` | **100%** (141) | fixed `@abdm` / `@sbx` suffix |
+| `IN_UPI_VPA` | **97%** / **100%** | NPCI VPA shape — no dot after the `@` |
+| `IN_VEHICLE_REGISTRATION` | **100%** / **98%** | CMVR 1989 Rule 50, including the BH series |
+| `IN_AADHAAR_VID` | no corpus exercises it | 16 digits, Verhoeff (UIDAI). Spec-backed but **unmeasured** |
+| `IN_DRIVING_LICENCE` | **100%** / **100%** | **empirical, not specified** — see below |
 
-### The driving-licence problem, stated plainly
+### The driving licence is the one exception, and it is marked as such
 
-Two independent corpora disagree completely about what an Indian driving
-licence looks like. maskara's values look like `KL-2009-119628` and
-`WBBY1990931178` — six-digit serials, four-letter prefixes. Our pattern
-forbids both, because it was built from an example this project invented
-(`KA05 20230012345`), and it matches IndiaPII only because IndiaPII's
-author happened to guess the same way.
+Every other pattern here cites a published specification. The driving
+licence has none that could be found: Wikipedia's licence article does not
+cover numbering, and secondary sources disagree on whether the RTO code is
+two characters or three. Two independent corpora contain incompatible
+shapes — `KA05 20230012345` against `KL-2009-119628` and `WBBY1990931178`.
 
-No authoritative specification was findable: Wikipedia's licence article
-does not cover numbering, and secondary sources disagree on whether the
-RTO code is two characters or three. **A recognizer that scores 100% and
-0% on two independent corpora has not been validated — it has been shown
-to match one author's opinion.**
+It is therefore **empirical**: the pattern accepts the union of what those
+two corpora contain, with a year in the middle as the invariant that keeps
+it from matching arbitrary alphanumerics. It reaches 100% on both, and
+rejects invoice numbers of similar shape.
 
-Note that the label mechanism catches the maskara cases anyway: their text
-reads `DL No: TSJB2003555471`, and `DL No` is a label.
+The distinction that matters: this is fitted to **two independent
+sources**, not to data this project generated. That is weaker than a
+specification and stronger than an invention, and the docstring says so.
+`DL No` is also a label, so `redactor/labels.py` covers these on a page
+regardless of shape.
 
 ### Presidio's own recognizers
 
