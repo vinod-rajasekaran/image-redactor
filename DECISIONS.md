@@ -2185,3 +2185,55 @@ checked only against the Indonesian KTP corpus, which is exactly what the
 rule above forbids. Re-run on `documents/`: **0 marginal catches, 0
 regressions**, 70/77 unchanged. The change is safe, but it was validated
 in the wrong order and the check is now recorded.
+
+---
+
+## 2026-09-16 — Audited against Tesseract's ImproveQuality guidance
+
+**Status:** Active — three techniques tested and rejected, three untested
+
+Checked the pipeline against
+[Tesseract's own quality guidance](https://tesseract-ocr.github.io/tessdoc/ImproveQuality.html).
+
+**Already done:** binarisation (the CLAHE+Otsu variant), page-segmentation
+tuning (PSM 4, benchmarked against 3/6/11/12), alpha-channel removal
+(everything is converted to RGB), and rescaling — though our rule targets a
+pixel *width*, not the character height the guidance is actually about.
+
+**Tested and inert — do not re-try without new evidence:**
+
+- **Disabling the dictionaries** (`load_system_dawg=0`, `load_freq_dawg=0`),
+  which the guidance recommends for codes and receipts. Byte-identical
+  output on every Indian ID card tested. Verified the config mechanism does
+  work by whitelisting digits and watching the output change, so this is a
+  real negative and not a silently ignored parameter.
+- **More upscaling.** Tesseract wants capitals 30-33px; ours measure 9-17px,
+  so this looked like the strongest lever. At 3x, raw OCR reads **five more
+  exact PII strings (59 -> 64 of 77)** and confidence on photoreal pages
+  jumps — `15_job_application_form` 49.8 -> 71.7, `18_bank_statement`
+  54.5 -> 87.7. **End to end it changes nothing**: 70 redacted, 7 leaked,
+  zero marginal catches, zero regressions. It also costs accuracy on the
+  clean Pillow renders, two of which lose a string at 3x.
+- **Deskew.** The guidance calls skew severe. Measured across the corpus:
+  0 images improved, 1 worsened. Most pages register ~0 degrees because the
+  photoreal documents carry *perspective*, not rotation, and a global
+  rotation cannot fix that.
+
+**The finding underneath all three: the pipeline's redundancy absorbs
+OCR-quality gains.** Three preprocessing variants, label anchoring and the
+recognizers already cover what sharper OCR would have found, so improving
+OCR quality moves raw text accuracy without moving redaction. That is why
+the upscale experiment produced five more strings and not one more
+redaction.
+
+Effort is better spent on the **backend**, where the same corpus moved
+cheque account numbers 40% -> 100%, than on tuning Tesseract's input.
+
+**Untested:** noise removal, dilation/erosion, border handling. Given the
+above, expect them to move raw OCR and not the end metric.
+
+**One thing worth fixing regardless:** `AUTO_UPSCALE_TARGET_WIDTH = 600`
+targets image width, when the guidance is about character height. It
+happens to give sensible factors here — 2x for the ~300px photoreal crops,
+1x for the 900px renders — but for the wrong reason, and it will mislead on
+a large scan of small text.
