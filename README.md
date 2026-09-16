@@ -6,8 +6,8 @@ redaction all run on-device; the only optional network call is to Claude,
 and only for *scoring*, never for redaction.
 
 It exists to answer one question honestly: **after redaction, can the PII
-still be read?** Most of the work here went into making that question
-measurable — the naive answers turned out to be wrong six times.
+still be read?** Most of the work here is in making that question
+measurable.
 
 > This README describes how the tool works **now**.
 > [DECISIONS.md](DECISIONS.md) is the time-ordered history: every default,
@@ -17,7 +17,7 @@ measurable — the naive answers turned out to be wrong six times.
 > [SOURCES.md](SOURCES.md) is every dataset and model, its licence as
 > checked, and what it is for.
 
-## Why this was built
+## Why this exists
 
 Point Presidio's image redactor at an Indian document and several things
 go wrong quietly. A stock `AnalyzerEngine()` loads **only US and UK
@@ -43,20 +43,19 @@ can cover most of a value and still leak it.
 
 ### Why not a layout model, or just a vision model
 
-A **YOLO document-layout model** was tested and rejected. It finds
+A **YOLO document-layout model** does not fit the problem. It finds
 *regions* — title, table, figure — not personal data, and no layout class
-distinguishes an account number from an invoice number. Training one for
-this would need annotated Indian PII documents, which is precisely what
-does not exist. It also carries AGPL-3.0, which would have been the only
-copyleft dependency here and attaches to anything deployed as a service.
+distinguishes an account number from an invoice number. Training one would
+need annotated Indian PII documents, which do not exist. It also carries
+AGPL-3.0, the only copyleft licence that would attach to anything
+deploying this as a service.
 
 A **vision model** reads these documents better than any OCR stack — this
 project uses one to *score* output, and it finds leaks OCR misses. But
 redaction needs pixels, not readings: knowing a number is on the page does
-not say what to black out, and vision-generated boxes were measured here
-sitting about a text row off. It also offers no checksum, no auditable
-reason a box was drawn, and on commodity hardware it is orders of
-magnitude slower. It is wired in as an optional extra pass
+not say what to black out, and vision-generated boxes sit about a text row
+off. It also offers no checksum, no auditable reason a box was drawn, and
+on commodity hardware it is orders of magnitude slower. It is wired in as an optional extra pass
 ([`--vlm`](#a-vision-model-as-a-second-pass)), unioned rather than
 substituted, so a model being wrong can only add a box.
 
@@ -93,20 +92,16 @@ and the handwritten payee name is unreadable to both OCR engines. Mean
 coverage 20% for account numbers, 46% for payee names. See
 [the cheque benchmark](#benchmarks).
 
-**Self-generated corpora are no longer used as evidence here.** Two were
-deleted outright in September 2026 after it became clear the recognizers
-and the test data had the same author and agreed with each other rather
-than with reality.
+**Corpora this project generated are not used as evidence.** Recognizers
+and test data written by the same author agree with each other rather than
+with reality, so only independent data counts.
 
 [**VALIDATION.md**](VALIDATION.md) is the standing account of what is
-measured, on whose data, and what is still unmeasured — including the
-gaps that matter most: the cheque set is 3% used, the geometry half of
-label-anchored redaction has never been run against a real page, and no
+measured, on whose data, and what is not — including the largest gap: no
 Indian **form** corpus exists that is both annotated and safe to use. The
-data that matches that description is real people's documents — real
-police reports, real Aadhaar cards — which a permissive licence does not
-make usable. [**SOURCES.md**](SOURCES.md) records every candidate, its
-licence as checked, and why it was taken or left.
+data matching that description is real people's documents, which a
+permissive licence does not make usable. [**SOURCES.md**](SOURCES.md)
+records every dataset and model, its licence as checked, and its purpose.
 
 ## Setup
 
@@ -148,10 +143,10 @@ the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
 Validation corpora live under `datasets/` — images and annotations
 together, one schema, one loader. Every image is synthetic: no real
-person, document or account appears anywhere in this repo. Both image
-corpora are committed, so every image benchmark below reproduces from a
-clone alone; only the third-party text benchmarks under `text/` are
-download-on-demand. Licences and provenance per corpus:
+person, document or account appears anywhere in this repo. `documents/`
+and `cheques/` are committed, so their benchmarks reproduce from a clone
+alone; the third-party corpora under `text/` and `ktp/` are fetched on
+demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
 
 ### Options
@@ -219,10 +214,11 @@ worth is your call.
 
 **Bounding boxes are the open question.** Knowing the number is
 `8643 6694 9352` does not say what to black out, and vision-generated
-boxes were measured on this corpus at about a text row off — which is why
-per-region coverage was built, measured and deleted. Document-grounded
-models return boxes with the text, so it is worth re-testing, but treat it
-as a hypothesis. Check a drawn output before trusting a new model.
+boxes sit about a text row off, which makes coverage computed from them
+unusable. Document-grounded models return boxes with the text, so this is
+worth testing — but check a drawn output before trusting a new model. A
+misplaced box looks like a successful redaction in the summary and leaves
+the value fully readable on the page.
 
 ## How an image is processed
 
@@ -289,9 +285,8 @@ leaks that a careful manual pass had missed.
 
 ## Auditing the ground truth
 
-The label set has been the single largest source of error here, swinging
-96 → 130 → 77 items across three revisions and moving the headline about
-ten points each time.
+What counts as PII is the single largest lever on the headline, so the
+label set is audited rather than trusted.
 
 ```bash
 python annotate_inputs.py     # diff vision's view against the labels
@@ -299,14 +294,12 @@ python annotate_inputs.py     # diff vision's view against the labels
 
 It **reports rather than rewrites**: what counts as PII is a policy
 question that belongs to a person, and human-owned labels stay independent
-of the model that grades the output. On the sample set it surfaced two
-items never labelled — a signature bearing a name, and a prescribing
-doctor.
+of the model that grades the output.
 
-It records bounding boxes for inspection but computes nothing from them.
-Per-region coverage was built and removed: the boxes are inconsistently
-off by about a text row, and coverage reported 0% for a field that is
-plainly blacked out.
+It records bounding boxes for inspection but computes nothing from them —
+vision-generated boxes sit inconsistently off by about a text row, so
+coverage computed from them is meaningless. Coverage is only used where a
+corpus ships boxes drawn by its publishers.
 
 ## Why the defaults are what they are
 
@@ -396,7 +389,6 @@ python benchmark_labels.py
 
 | | recall | precision |
 |---|---:|---:|
-| exact-phrase matching (first attempt) | 43.5% | — |
 | **token matching** | **100.0%** | **97.2%** |
 | a rule that matches every labelled line | 100.0% | 87.6% |
 
@@ -405,10 +397,39 @@ The third row is the control that keeps the second honest: this corpus is
 discrimination — **80% of the non-PII labelled lines are rejected while no
 PII is lost**. On maskara the OCR-corrupted domain also scores 100%.
 
-What this does *not* test: the geometry that pairs a label to its value on
-a page, which needs annotated form images that do not exist for India
-under a permissive licence. That half is pinned by `test_labels.py` on
-hand-built OCR output — weaker evidence, and labelled as such.
+This tests the **lexicon** only. The **geometry** that pairs a label to its
+value on a page is measured separately, below — no annotated Indian form
+images exist under a permissive licence, but the geometry is
+locale-independent.
+
+**Label-anchored geometry** — 20 synthetic Indonesian national ID cards
+([`cloverx-id/indonesian-id-card-dummy`](https://huggingface.co/datasets/cloverx-id/indonesian-id-card-dummy),
+CC-BY-4.0) with publisher-authored per-field boxes. A KTP is structurally
+an Aadhaar card — national ID number, name, date of birth, address — and
+the label→value geometry is locale-independent, so this tests the
+mechanism while the lexicon is measured on Indian text:
+
+```bash
+python ktp_benchmark.py --limit 20
+python ktp_benchmark.py --diagnose      # lexicon coverage first
+python evaluate_redactor.py --input datasets/ktp/images --run-name ktp
+python ktp_benchmark.py --score runs/ktp
+```
+
+| field | anchoring off | on |
+|---|---:|---:|
+| id_number | 32% | **82%** |
+| name | 21% | **63%** |
+| address | 16% | **61%** |
+| religion | 13% | **60%** |
+| regions fully covered | 12/180 | **44/180** |
+
+`religion` and `blood_type` have no recognizer at all — no pattern matches
+`BUDHA` or `O` — so nothing but label-anchoring can cover them. Run
+`--diagnose` before reading any score: labels the lexicon does not know
+cannot be anchored, so a low number may be the lexicon rather than the
+geometry. Coverage understates here because the publishers' boxes are
+padded to a fixed column width.
 
 **Cheques** — 10 synthetic Indian cheques
 ([`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images),
@@ -532,6 +553,10 @@ benchmark_indiapii.py       recognizers vs IndiaPII-Bench (CC-BY-4.0)
 benchmark_maskara.py        recognizers vs maskara-indian-pii-200k (MIT)
 benchmark_labels.py         label lexicon vs IndiaPII-Bench forms
 cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
+ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
+compare_runs.py             diff two scored runs: marginal catch vs cost
+test_labels.py              label geometry, hand-built OCR
+test_vlm.py                 vision-model reply parsing
 test_metadata_stripping.py  regression guard for EXIF stripping
 setup.sh                    one-time environment setup
 DECISIONS.md                why everything is the way it is
