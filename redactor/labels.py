@@ -91,10 +91,11 @@ WEAK_TERMS: frozenset[str] = frozenset({
     # A professional's name is still a person's name. `annotate_inputs.py`
     # surfaced a prescribing doctor as an item the ground truth had missed.
     "doctor", "physician", "surgeon", "practitioner", "nurse",
-    # s/o, d/o, w/o — son/daughter/wife of. Ubiquitous on Indian forms, and
-    # the value beside one is a relative's name. Weak rather than strong, so
-    # an institutional qualifier still vetoes them.
-    "so", "do", "wo",
+    # "so", "do" and "wo" — from s/o, d/o, w/o — were tried and removed.
+    # Two-letter tokens match OCR noise readily: across 30 images they were
+    # 2 of 92 labels found and both were garbage ("aoe" as the value), while
+    # neither corpus contains an actual s/o field. No measured benefit,
+    # observed cost. Re-add only with a corpus that has such fields.
     "नाम", "पता", "हस्ताक्षर",
 })
 

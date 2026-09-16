@@ -1961,3 +1961,39 @@ wording now says "to check by eye" and explains the difference.
 
 **Runs kept for inspection:** `runs/documents`, `runs/documents_medner`,
 `runs/cheques`, each with `scored/` images where failures are outlined.
+
+---
+
+## 2026-09-16 — Why six of ten cheque account numbers still leak
+
+**Status:** Active — diagnosis, not a fix
+
+Inspection of the drawn output confirms the legibility score exactly:
+**4 of 10 account numbers covered, 6 readable.** Axis (3) and one
+Syndicate are covered; all three Canara, both ICICI and one Syndicate are
+not.
+
+**The label logic is not at fault; OCR is.**
+
+- **Canara** — Tesseract reads *no* account label at all. `खा. सं. / A/c No.`
+  sits on a dense blue guilloche background and does not survive OCR. No
+  label, no anchor.
+- **ICICI** — the number is at (407, 570) and the only `account` label OCR
+  finds is at (1283, 665), in the footer prose "…ICICI Bank Limited in
+  India". Its value words are `Bank Limited in India`. The real `A/c No.`
+  label is never read as a unit.
+- **Axis** — reads `A/C` and `NO.` cleanly on a plain background, the
+  label resolves, and the value beside it is covered.
+
+So the gap is OCR on cheque security backgrounds, which is the same root
+cause as the handwriting failures on these images. A better label lexicon
+cannot fix it; a backend that reads patterned backgrounds might.
+
+**Removed again: `so` / `do` / `wo`.** Added hours earlier for s/o, d/o
+and w/o on the reasoning that they precede a relative's name. Across 30
+images they accounted for 2 of 92 labels found and **both were OCR noise**
+— one had `aoe` as its value — while neither corpus contains an actual
+s/o field. No measured benefit and an observed cost, so they are out.
+Added on plausibility rather than evidence, which is the error this
+project keeps having to correct; re-add only alongside a corpus that
+contains such fields.
