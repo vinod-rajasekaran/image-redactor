@@ -1997,3 +1997,46 @@ s/o field. No measured benefit and an observed cost, so they are out.
 Added on plausibility rather than evidence, which is the error this
 project keeps having to correct; re-add only alongside a corpus that
 contains such fields.
+
+---
+
+## 2026-09-16 — PaddleOCR nearly solves the cheques; it costs 25x
+
+**Status:** Active — measured, not yet a default
+
+The cheque failure has been this project's standing evidence that its
+headline does not generalise. Most of it was the OCR backend.
+
+Legibility on the same 10 cheques, same pipeline, backend swapped:
+
+| element | tesseract | paddle |
+|---|---:|---:|
+| account number | 40% | **100%** |
+| payee name | 60% | **90%** |
+| signature | 60% | **80%** |
+| MICR line | 60% | **100%** |
+| branch IFSC | 100% | 100% |
+
+Across the three fields this project counts as personal data:
+**16/30 → 27/30.**
+
+**Why.** Tesseract cannot read `A/c No.` on a Canara or ICICI security
+background under *any* preprocessing — not RGB, greyscale or CLAHE+Otsu,
+and not the R, G, B, HSV-value or desaturated-ink variants tried
+afterwards. Paddle reads it directly. With no label there is nothing to
+anchor, which is why six of ten account numbers were readable.
+
+**A geometry fix came with it.** Once Paddle supplied the label, ICICI
+still failed: the `A/c No.` cell sits 0.69 of its own height above the
+value, so the boxes overlapped by 11px where `SAME_ROW_TOLERANCE = 0.6`
+demanded 22. Lowered to 0.3 — adjacent rows in a form do not overlap at
+all, so a lower bar still separates them. Checked against the independent
+KTP corpus: 44 → 45 regions fully covered, no regression.
+
+**The cost is the problem: 131.6 s/image against Tesseract's 5.2 — 25x.**
+On 2365x1065 cheques that is 22 minutes for ten images.
+
+**Not made the default.** Tesseract stays, because it is 25x cheaper and
+loses nothing on printed forms. `--ocr paddle` is the right choice for
+cheques and any document with a patterned or coloured background, and that
+is now a measured recommendation rather than a hunch.

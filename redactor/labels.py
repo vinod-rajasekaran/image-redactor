@@ -169,7 +169,13 @@ MAX_LABEL_WORDS = 4
 # Geometry. A value sits on the label's row starting to its right, or in
 # the cell directly beneath it. Expressed in multiples of the label's own
 # height so they hold at any resolution.
-SAME_ROW_TOLERANCE = 0.6      # vertical overlap needed to count as one row
+# Vertical overlap needed to count as one row, as a fraction of the shorter
+# box. 0.6 was too strict for boxed forms: on an ICICI cheque the `A/c No.`
+# label and its number overlap by 11px where 0.6 demanded 22, because the
+# label sits in a left cell 0.69 of its own height above the value. Adjacent
+# rows in a normal form do not overlap at all, so a lower bar separates them
+# just as well.
+SAME_ROW_TOLERANCE = 0.3
 MAX_GAP_RIGHT = 12.0          # how far right of the label a value may start
 BELOW_MAX_DROP = 2.2          # how far beneath, for stacked label/value
 BELOW_MAX_SHIFT = 1.0         # horizontal drift allowed for a value beneath
