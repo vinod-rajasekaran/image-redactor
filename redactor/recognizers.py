@@ -369,6 +369,51 @@ INDIA_RECOGNIZER_NAMES = [
 
 
 
+# Presidio discards spaCy's ORG tag by default: its NerModelConfiguration
+# lists ORGANIZATION in `labels_to_ignore`, so `Sundaram Medical Centre` is
+# tagged correctly by the model, mapped ORG -> ORGANIZATION, and then thrown
+# away. An organisation narrows identity — a hospital, an employer, an
+# issuing bank — so it is re-enabled here.
+SPACY_LABELS_TO_IGNORE = [
+    "CARDINAL", "EVENT", "LANGUAGE", "LAW", "MONEY", "ORDINAL",
+    "PERCENT", "PRODUCT", "QUANTITY", "WORK_OF_ART",
+]
+
+# Detected but **not redacted unless asked for**. A date is the one entity
+# whose instances split cleanly into personal and not: a date of birth
+# identifies someone, a dosage schedule ("1 tablet twice daily for 8 weeks")
+# or a statement period does not, and no entity type can tell them apart.
+#
+# Redacting all of them destroys the content a downstream reader needs — on
+# a prescription it blacks out `daily`, `weekly` and `8 weeks`. Dates of
+# birth are covered instead by `labels.py`, because `Date of Birth` is a
+# personal-data label while `Date` and `Visit Date` are not. Measured on the
+# documents corpus, that recovers 6 of 7 DOBs.
+#
+# `--dates` puts DATE_TIME back.
+DEFAULT_EXCLUDED_ENTITIES = ("DATE_TIME",)
+
+
+def build_nlp_engine():
+    """spaCy engine with ORGANIZATION un-suppressed."""
+    from presidio_analyzer.nlp_engine import NerModelConfiguration, SpacyNlpEngine
+
+    engine = SpacyNlpEngine(
+        models=[{"lang_code": "en", "model_name": "en_core_web_lg"}],
+        ner_model_configuration=NerModelConfiguration(
+            labels_to_ignore=list(SPACY_LABELS_TO_IGNORE)
+        ),
+    )
+    engine.load()
+    return engine
+
+
+def default_entities(registry) -> list[str]:
+    """Everything the registry supports, minus the deliberately excluded."""
+    supported = {e for rec in registry.recognizers for e in rec.supported_entities}
+    return sorted(supported - set(DEFAULT_EXCLUDED_ENTITIES))
+
+
 def build_registry(
     logger: logging.Logger | None = None,
     ocr_tolerant_aadhaar: bool = True,

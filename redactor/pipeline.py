@@ -152,12 +152,12 @@ def build_engines(
     from presidio_image_redactor import ImageAnalyzerEngine, ImageRedactorEngine
 
     from .ocr import build_ocr
-    from .recognizers import build_registry
+    from .recognizers import build_nlp_engine, build_registry
 
     registry = build_registry(
         logger, ocr_tolerant_aadhaar=ocr_tolerant_aadhaar, medical_ner=medical_ner
     )
-    analyzer_engine = AnalyzerEngine(registry=registry)
+    analyzer_engine = AnalyzerEngine(registry=registry, nlp_engine=build_nlp_engine())
     logger.info("Loading OCR backend: [bold]%s[/bold]", ocr_backend)
     image_analyzer = ImageAnalyzerEngine(
         analyzer_engine=analyzer_engine, ocr=build_ocr(ocr_backend, psm, reading_order)

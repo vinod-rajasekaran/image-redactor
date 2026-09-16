@@ -2283,3 +2283,53 @@ the session was that flip, not a real loss.
 `compare_runs.py` now says so in its docstring and warns when a comparison
 turns on a single item. Every A/B in this file with a margin of one should
 be read with that in mind.
+
+---
+
+## 2026-09-16 — `DATE_TIME` off by default, `ORGANIZATION` on
+
+**Status:** Active — changes what a default run redacts
+
+Prompted by a concrete use case: a prescription passing through a
+downstream AI, where the patient, doctor, hospital and signature must go
+but the conditions, diagnosis and dosage must stay.
+
+**What a default run used to do to a prescription.** `DATE_TIME` matched
+`daily` twice, `weekly`, and `8 weeks` twice — the entire dosage schedule —
+and block merging spread those boxes onto the drug names beside them. The
+patient name was covered correctly and the document was useless to the
+reader it was being prepared for.
+
+**`DATE_TIME` is now off by default.** It is the one entity whose instances
+split cleanly into personal and not — a date of birth identifies someone, a
+dosage schedule or statement period does not — and no entity type can tell
+them apart. **Labels can**: `Date of Birth` and `DOB` are personal-data
+labels while `Date` and `Visit Date` are not, which recovers **6 of 7 DOBs**
+on the documents corpus. `--dates` restores it.
+
+**`ORGANIZATION` is now on.** It was never a decision here: Presidio's
+`NerModelConfiguration` lists `ORGANIZATION` in `labels_to_ignore`, so
+spaCy tagged `Sundaram Medical Centre` as `ORG` correctly, Presidio mapped
+`ORG -> ORGANIZATION`, and then threw it away. Re-enabled by constructing
+the NLP engine with that label removed from the ignore list.
+
+**Measured on `documents/`:**
+
+| | core PII | prescription |
+|---|---:|---|
+| before | 97.2% (70/72) | dosage schedule destroyed |
+| after | **95.8%** (69/72) | **dosage schedule intact, hospital name covered** |
+
+The two changes very nearly cancel: dropping `DATE_TIME` alone cost 3
+items, and enabling `ORGANIZATION` recovered all 3 — verified as a clean
+A/B, +3 catches and 0 regressions. The net 1-item difference is on
+`11_aadhaar_card.png`, where OCR reads the number out of order
+(`9876 ... 4587 6321`) so the 4-4-4 pattern never forms; `DATE_TIME` had
+been covering those stray digit groups by accident. That is an OCR failure
+the entity change merely stopped masking.
+
+**Known limit, unfixed.** spaCy tags some drug names as `PERSON` —
+`Atorvastatin` and `Vitamin D3 60K` are still redacted on the prescription.
+That is the same recognizer that covers the patient, so no entity setting
+separates them. `--no-merge-blocks` tightens the boxes and stops the spill
+onto neighbouring words, at no measured cost on this corpus.

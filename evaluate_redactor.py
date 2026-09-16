@@ -31,6 +31,7 @@ from rich.progress import (
 from rich.table import Table
 
 from redactor.ocr import OCR_BACKENDS, TESSERACT_PSM_MODES
+from redactor.recognizers import default_entities
 from redactor.pipeline import (
     AUTO_UPSCALE_TARGET_TEXT_HEIGHT,
     SUPPORTED_EXTENSIONS,
@@ -207,6 +208,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--dates",
+        action="store_true",
+        help=(
+            "Also redact DATE_TIME. Off by default: a date of birth is "
+            "personal data but a dosage schedule or statement period is not, "
+            "and no entity type separates them — redacting all of them blacks "
+            "out 'twice daily' and 'for 8 weeks' on a prescription. Dates of "
+            "birth are covered by their label instead"
+        ),
+    )
+    parser.add_argument(
         "--no-label-anchored",
         dest="label_anchored",
         action="store_false",
@@ -367,7 +379,9 @@ def main() -> None:
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
         "score_threshold": args.threshold,
-        "entities": args.entities or "all_supported",
+        "entities": args.entities or (
+            "all_supported" if args.dates else "all_supported_except_DATE_TIME"
+        ),
         "ocr_tolerant_aadhaar": not args.strict_aadhaar,
         "upscale": args.upscale,
         "vlm": vlm_options,
@@ -389,6 +403,11 @@ def main() -> None:
     analyzer_kwargs: dict = {"score_threshold": args.threshold}
     if args.entities:
         analyzer_kwargs["entities"] = args.entities
+    elif not args.dates:
+        # Restrict to everything except the deliberately excluded types.
+        # Presidio treats "no entities argument" as "all of them", so the
+        # exclusion has to be expressed as an explicit list.
+        analyzer_kwargs["entities"] = default_entities(analyzer.analyzer_engine.registry)
     logger.info(
         "Score threshold: %.2f | Entities: %s | Visual PII: %s",
         args.threshold,

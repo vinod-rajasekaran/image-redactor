@@ -172,6 +172,7 @@ demand. Licences and provenance per corpus:
 | `--no-merge-blocks` | off | Don't merge stacked boxes into blocks |
 | `--no-reading-order` | off | Don't re-sort OCR words into reading order |
 | `--medical-ner` | off | Detect diagnoses/medications (needs transformers) |
+| `--dates` | off | Also redact `DATE_TIME` — see [what is redacted by default](#what-is-redacted-by-default) |
 | `--strict-aadhaar` | off | Require a valid Verhoeff checksum |
 | `--pyzbar` / `--wechat-qr` | off | Extra code detectors (supplements, not replacements) |
 | `--vlm` | off | Union a local vision model's boxes on top (see below) |
@@ -216,6 +217,36 @@ unusable. Document-grounded models return boxes with the text, so this is
 worth testing — but check a drawn output before trusting a new model. A
 misplaced box looks like a successful redaction in the summary and leaves
 the value fully readable on the page.
+
+## What is redacted by default
+
+Two entity types are deliberately not treated alike.
+
+**`ORGANIZATION` is on.** Presidio suppresses it — its `NerModelConfiguration`
+lists `ORGANIZATION` in `labels_to_ignore`, so spaCy tags a hospital
+correctly, Presidio maps `ORG → ORGANIZATION`, and then discards it. An
+organisation narrows identity — a hospital, an employer, an issuing bank —
+so it is re-enabled here.
+
+**`DATE_TIME` is off.** It is the one entity whose instances split cleanly
+into personal and not: a date of birth identifies someone, a dosage
+schedule or a statement period does not, and **no entity type separates
+them**. Redacting all of them destroys the content a downstream reader
+needs — on a prescription it blacks out `twice daily`, `once weekly` and
+`for 8 weeks`.
+
+Dates of birth are covered by their **label** instead: `Date of Birth` and
+`DOB` are personal-data labels while `Date` and `Visit Date` are not. On
+the documents corpus that recovers 6 of 7 DOBs, and enabling
+`ORGANIZATION` recovers the rest, so the two changes together cost about a
+point of core recall while leaving clinical text readable.
+
+`--dates` puts `DATE_TIME` back for a privacy-maximising run.
+
+**Known limit:** spaCy tags some drug names as `PERSON` — `Atorvastatin`
+is redacted on a prescription. That is the same recognizer that covers the
+patient, so no entity setting separates them. `--no-merge-blocks` tightens
+the boxes and reduces the spill onto neighbouring words.
 
 ## What it detects
 
