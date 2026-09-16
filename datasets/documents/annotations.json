@@ -2,10 +2,10 @@
   "_meta": {
     "description": "20 synthetic Indian documents: 10 rendered by generate_test_images.py, 10 image-model generations (OpenAI) supplied as a collage and split into individual pages.",
     "source": "generate_test_images.py (01-10); OpenAI image generation (11-20)",
-    "licence": "Fully synthetic — every name, number and address is fabricated; no real person or real document. Freely redistributable, and essentially all of it is AI-generated: 01-10 rendered by a script Claude wrote from values Claude chose, 11-20 by an OpenAI image model, the annotations by Claude and audited by a person. No copyright is asserted over machine-generated output; the repository's MIT licence covers the code and the human-directed selection and curation. See SOURCES.md.",
+    "licence": "Fully synthetic \u2014 every name, number and address is fabricated; no real person or real document. Freely redistributable, and essentially all of it is AI-generated: 01-10 rendered by a script Claude wrote from values Claude chose, 11-20 by an OpenAI image model, the annotations by Claude and audited by a person. No copyright is asserted over machine-generated output; the repository's MIT licence covers the code and the human-directed selection and curation. See SOURCES.md.",
     "annotation": "text (legibility scoring), hand-labelled then vision-audited",
-    "note": "11-20 imitate photographed pages — perspective, glare, low contrast — which is why they are the hardest images here. That is rendered appearance, not a camera.",
-    "note_2026_09_15": "expected_type set to null for seven entity types whose recognizers were removed: nothing in the registry produces them any more. Item count and text unchanged — scoring is legibility-based and never read this field."
+    "note": "11-20 imitate photographed pages \u2014 perspective, glare, low contrast \u2014 which is why they are the hardest images here. That is rendered appearance, not a camera.",
+    "note_2026_09_15": "expected_type set to null for seven entity types whose recognizers were removed: nothing in the registry produces them any more. Item count and text unchanged \u2014 scoring is legibility-based and never read this field."
   },
   "01_aadhaar_card.png": {
     "source": "synthetic",
@@ -388,7 +388,7 @@
     }
   },
   "11_aadhaar_card.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -418,7 +418,7 @@
     "notes": "Aadhaar number is checksum-INVALID; stock Presidio misses it."
   },
   "12_pan_card.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -454,7 +454,7 @@
     "notes": "PAN 4th char 'D' is not a valid holder-type code, scores 0.45."
   },
   "13_water_bill.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -483,7 +483,7 @@
     }
   },
   "14_passport.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [],
     "visual": {
@@ -494,7 +494,7 @@
     "notes": "Closed passport cover. Any detection here is a false positive."
   },
   "15_job_application_form.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -535,7 +535,7 @@
     }
   },
   "16_lab_test_report.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -565,7 +565,7 @@
     "notes": "Lab values excluded: a measurement identifies nobody."
   },
   "17_doctor_prescription.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -607,7 +607,7 @@
     "notes": "Handwritten body; neither OCR engine reads it reliably."
   },
   "18_bank_statement.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -631,7 +631,7 @@
     "notes": "Transactions, balances and the bank helpline excluded: amounts and merchants identify nobody on their own."
   },
   "19_loan_application.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {
@@ -673,7 +673,7 @@
     "notes": "Photo of a laptop screen; Tesseract reads almost nothing."
   },
   "20_flight_booking.png": {
-    "source": "real",
+    "source": "photographic",
     "labelled_by": "vision",
     "pii": [
       {

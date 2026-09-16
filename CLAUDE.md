@@ -65,10 +65,10 @@ A local evaluation harness for Presidio's image redaction, aimed at Indian
 documents. OCR, detection and redaction run on-device. The only network
 call is to Claude, and only for *scoring* — never for redaction.
 
-Current result: **97.2% of core PII redacted** (70/72 across 20
-documents), vision-scored. Five further `sensitive`-tier items — diagnoses
-and medications — need `--medical-ner`, which is off by default; with it
-the overall figure is 97.4% (75/77).
+Current result: **94.4% of core PII redacted** (68/72 across 20
+documents), 90.9% overall (70/77), vision-scored. The five
+`sensitive`-tier items — diagnoses and medications — go 2/5 to 5/5 with
+`--medical-ner`, which is off by default because it pulls in torch.
 
 ## Layout
 
@@ -101,6 +101,9 @@ the overall figure is 97.4% (75/77).
   detection cannot cover identifiers that have no national format, and
   because every OCR word already carries a box that the text-flattening
   path was throwing away.
+- `clinical.py` — the one module that **removes** boxes. Off by default
+  (`--protect-clinical`), for documents a clinician or downstream model
+  must still be able to read. See the trap below before changing it.
 
 `datasets/` holds every validation corpus — images and annotations
 together, one schema, loaded through `redactor.datasets.load(name)`.
@@ -122,7 +125,7 @@ be.
 `pack/` and `generated/` — were deleted in September 2026 for exactly that
 reason: the recognizers and the test data had the same author, so they
 agreed with each other and not with reality. `documents/` stays, but it is
-familiar material and its 97.2% is a ceiling, not a measurement. Evidence
+familiar material and its 94.4% is a ceiling, not a measurement. Evidence
 for a change must come from data nobody here produced: the cheque images,
 IndiaPII-Bench, or maskara.
 
@@ -177,6 +180,21 @@ notice. Anything else is a label problem, not a pattern one — see
 them. Two Paddle bugs looked like improvements by that measure. Score
 leakage instead.
 
+**`--protect-clinical` removes boxes, which nothing else here does.** Two
+invariants hold it safe and both are easy to break by accident:
+`SUPPRESSIBLE_TYPES` in `redactor/clinical.py` is the whole set of box
+types that can ever be withdrawn, and adding an identifier type to it
+would make a clinical sentence a place to hide an Aadhaar; and suppression
+runs **before** block merging, because merging first fuses a drug name
+into a neighbouring real box and makes it unwithdrawable. `test_clinical.py`
+pins both. Any failure to load leaves `clinical_regions` empty, which
+withdraws nothing — the safe direction, and deliberately so.
+
+**`MIN_SCORE = 0.5` in `clinical.py` is doing real work, not tidying.**
+Below it the clinical model tags form vocabulary — `PAN`, `Aadhaar`,
+`Passport` — as `DIAGNOSTIC_PROCEDURE` at 0.31-0.38. Lowering it
+re-introduces 7 false-positive withdrawals on `documents/` alone.
+
 **Evidence must come from data this project did not produce.** The
 image-model generator, its value layer and the realism comparison tool
 were all deleted in September 2026 along with the corpora they made. They
@@ -223,6 +241,10 @@ dependency this project would have).
   the same mistake, applying a positional limit to every word of a value
   instead of only to where the value starts, which silently truncated
   multi-word values. Run it after touching `labels.py`.
+- `test_clinical.py` pins the suppression rule, not the clinical model. A
+  test asserting the model scores `Metformin` at 0.83 would pin a model
+  version; what is pinned instead is what the rule will and will not
+  withdraw. Run it after touching `clinical.py`.
 - `test_metadata_stripping.py` guards one thing: that redacted output carries no EXIF, GPS or embedded thumbnail.
   It was verified to fail when the protection is removed. Validation is
   otherwise by running the pipeline and scoring it.

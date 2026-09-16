@@ -130,7 +130,13 @@ def p(text, etype, field, tier="core"):
 # Labelled by reading each image at full resolution, then filtered to
 # items that identify a person. See the module docstring for what was
 # deliberately excluded.
-REAL_GROUND_TRUTH = {
+#
+# "photographic" is rendered appearance, not provenance: 11-20 were made
+# by an OpenAI image model and imitate a photographed page — perspective,
+# glare, low contrast — which is what makes them the hardest images here.
+# They were once labelled `real` in this file, and that was wrong; no real
+# person's document appears anywhere in this repo.
+PHOTOGRAPHIC_GROUND_TRUTH = {
     "11_aadhaar_card.png": {
         "pii": [
             p("Priya Sharma", "PERSON", "Name"),
@@ -230,8 +236,8 @@ REAL_GROUND_TRUTH = {
 
 def main() -> None:
     truth = synthetic_ground_truth()
-    for name, entry in REAL_GROUND_TRUTH.items():
-        truth[name] = {"source": "real", "labelled_by": "vision", **entry}
+    for name, entry in PHOTOGRAPHIC_GROUND_TRUTH.items():
+        truth[name] = {"source": "photographic", "labelled_by": "vision", **entry}
 
     by_tier: dict[str, int] = {}
     unsupported = 0

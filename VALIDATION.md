@@ -44,7 +44,7 @@ with reality, and the scores split exactly along that line:
 
 | corpus | produced by | score |
 |---|---|---|
-| `documents/` | this project | 97.2% core |
+| `documents/` | this project | 94.4% core |
 | `pack/` | this project | 90% |
 | `generated/` | this project | 79.0% |
 | IndiaPII-Bench | independent | 76.6% |
@@ -73,13 +73,15 @@ session could reach for it.
 
 | what | data | result |
 |---|---|---|
-| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **97.2% core** (70/72); 97.4% overall with `--medical-ner` |
+| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **94.4% core** (68/72), 90.9% overall; the sensitive tier goes 2/5 -> 5/5 with `--medical-ner` |
+| clinical protection | `documents/`, defaults vs `--protect-clinical`, vision-scored | 12 boxes withdrawn on 3 images; the only verdicts that changed are the two drug names the flag exists to preserve, and no identifier moved |
 | label geometry | hand-built OCR dicts, `test_labels.py` | 17 checks pass |
+| clinical suppression rule | hand-built boxes, `test_clinical.py` | 13 checks pass |
 | metadata hygiene | synthetic EXIF/GPS fixtures, `test_metadata_stripping.py` | 3 checks pass |
 
 `documents/` is kept because it is the original corpus, its 77 items were
 audited by an independent vision pass, and its leaks are documented. But
-**97.2% is a ceiling on familiar material, not performance.**
+**94.4% is a ceiling on familiar material, not performance.**
 
 ---
 
@@ -297,7 +299,29 @@ idea, and the single box it produced was accurate and tightly placed.
 Re-test on a machine that can hold a 7B model before drawing any
 conclusion about whether this replaces or supplements the OCR path.
 
-### 7. Untested entirely
+### 7. Clinical protection is measured on three images, all produced here
+
+`--protect-clinical` is off by default and validated only on `documents/`:
+12 boxes withdrawn across 3 of 20 images, of which one prescription
+carries 10. That is enough to show the mechanism works and enough to show
+it withdraws nothing it should not — **no identifier changed verdict, on
+any image** — but it is not enough to characterise the clinical model's
+false-positive rate.
+
+What is known about that rate is the reason for the 0.5 score threshold.
+Without it the model tagged `PAN`, `Aadhaar`, `Passport`, `Blood Group`
+and `Health Insurance` as `DIAGNOSTIC_PROCEDURE`, all between 0.31 and
+0.38 — form vocabulary, on documents with no clinical content at all.
+Every genuine clinical span scored 0.48 or better. The threshold removed 7
+of 19 withdrawals and every one removed was a false positive, but it is
+fitted to one corpus of 20 images and the separation may not hold on a
+discharge summary, a vaccination card or a handwritten chart.
+
+The gap that would close this is the same one as everywhere else: an
+independent, annotated corpus of Indian medical documents. None exists
+under a licence and an ethics this project will accept.
+
+### 8. Untested entirely
 
 - **Devanagari and other Indic scripts.** Both text corpora are Latin. The
   lexicon carries Devanagari terms that no benchmark exercises.

@@ -48,6 +48,7 @@ class ImageResult:
     upscale_factor: int = 1
     visual_regions: dict[str, int] = field(default_factory=dict)
     decodable_codes: list[str] = field(default_factory=list)
+    clinical_withdrawn: int = 0
 
 
 def estimate_text_height(image) -> int:
@@ -205,6 +206,24 @@ def _labelled_values_for(analyzer, image, factor: int) -> list:
         return []
 
 
+def _clinical_regions_for(analyzer, image, factor: int) -> list:
+    """Locate clinical content on one variant, so boxes on it can be withdrawn.
+
+    Failure here must never fail the image, and must never *widen* what is
+    withdrawn: an empty list means nothing is protected, which is the safe
+    direction.
+    """
+    import numpy as np
+
+    from .clinical import protected_regions
+
+    try:
+        result = analyzer.ocr.perform_ocr(np.asarray(image))
+        return protected_regions(result, analyzer.analyzer_engine, factor)
+    except Exception:
+        return []
+
+
 def process_image(
     path: Path,
     output_dir: Path,
@@ -220,6 +239,7 @@ def process_image(
     style: str = "solid",
     merge_blocks: bool = True,
     label_anchored: bool = True,
+    protect_clinical: bool = False,
     vlm: dict | None = None,
 ) -> ImageResult:
     from PIL import Image
@@ -280,11 +300,20 @@ def process_image(
             # preprocessed variant: the preprocessing exists to help OCR,
             # and a vision model does not want it.
             vlm_job = pool.submit(_vlm_regions_for, image, vlm) if vlm else None
+            # Clinical protection needs word geometry for the whole page, so
+            # it reads its own OCR pass; running it here keeps it off the
+            # critical path rather than adding to it.
+            clinical_job = (
+                pool.submit(_clinical_regions_for, analyzer, variants[0], factor)
+                if protect_clinical
+                else None
+            )
             per_variant = [job.result() for job in text_jobs]
             regions = visual_job.result() if visual_job else []
             label_regions = [job.result() for job in label_jobs]
             if vlm_job is not None:
                 label_regions.append(vlm_job.result())
+            clinical_regions = clinical_job.result() if clinical_job else []
     except Exception as exc:
         logger.exception("Analysis failed for %s", path.name)
         return ImageResult(
@@ -320,6 +349,15 @@ def process_image(
     # A wrapped address is detected line by line and often only partly, so
     # redacting each box alone can never cover the words that were never
     # detected. The enclosing rectangle of a stacked cluster does.
+    # Withdraw NER boxes sitting on clinical content, before merging —
+    # merging first would fuse a drug name into a neighbouring real box and
+    # make it unwithdrawable.
+    clinical_withdrawn = 0
+    if clinical_regions:
+        from .clinical import suppress
+
+        raw_boxes, clinical_withdrawn = suppress(raw_boxes, clinical_regions)
+
     if merge_blocks:
         raw_boxes = merge_same_type_blocks(raw_boxes)
     text_boxes = [VisualRegion("text", *b[1:]) for b in raw_boxes]
@@ -388,11 +426,12 @@ def process_image(
         else ""
     )
     logger.info(
-        "[green]%s[/green]: redacted %d entities (%s)%s%s in %.2fs",
+        "[green]%s[/green]: redacted %d entities (%s)%s%s%s in %.2fs",
         path.name,
         len(text_boxes),
         ", ".join(sorted(entities)) or "none",
         visual_note,
+        f" [dim]-{clinical_withdrawn} clinical[/dim]" if clinical_withdrawn else "",
         f" [dim]@{factor}x[/dim]" if factor != 1 else "",
         duration,
     )
@@ -406,6 +445,7 @@ def process_image(
         upscale_factor=factor,
         visual_regions=visual_counts,
         decodable_codes=decodable,
+        clinical_withdrawn=clinical_withdrawn,
     )
 
 

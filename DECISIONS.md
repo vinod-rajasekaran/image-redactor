@@ -2333,3 +2333,95 @@ the entity change merely stopped masking.
 That is the same recognizer that covers the patient, so no entity setting
 separates them. `--no-merge-blocks` tightens the boxes and stops the spill
 onto neighbouring words, at no measured cost on this corpus.
+
+---
+
+## 2026-09-16 — Clinical content protected by a model, not by rules
+
+**Status:** Active — new flag `--protect-clinical`, off by default
+
+Closes the known limit recorded in the entry above: spaCy tags
+`Atorvastatin` as `LOCATION` in one preprocessing variant and as
+`ORGANIZATION` in another, both at 0.85, so a default run blacks out the
+drug names on a prescription. It is the same recognizer that covers the
+patient, so no entity setting separates them.
+
+**Options considered:**
+
+1. *Leave it.* The dosage schedule survives; the drug names do not. A
+   prescription is still unusable to the reader it is prepared for.
+2. *A dose-adjacency rule* — a word followed by a quantity and a unit is a
+   medication. Tried on paper; **rejected**. It works on this prescription
+   and fails on a lab report, a discharge summary or a vaccination card,
+   and it misses `Vitamin D3 60K`, which carries no `mg`. It is also
+   exactly the mistake the seven culled recognizers made: a shape fitted
+   to the document in front of us. The user rejected it in the same terms
+   — "we are adding too many rules in option 2 and this wont work for
+   other images of forms".
+3. *A clinical model.* **Chosen.** Presidio's `MedicalNERRecognizer`
+   carries real clinical vocabulary: it tags `Metformin`, `Atorvastatin`
+   and `Vitamin D3 60K` as `MEDICAL_MEDICATION`, the schedules as
+   `DOSAGE`, `Type 2 Diabetes Mellitus` as a disorder, and claims neither
+   `Priya Sharma` nor `R. Venkat`.
+
+**The mechanism withdraws boxes; it never adds them.** A `PERSON`,
+`LOCATION`, `ORGANIZATION` or `NRP` box is dropped when at least half of
+it lies on protected clinical text. Those four types are the whole
+suppressible set, so **no identifier can be withdrawn** — a
+checksum-validated Aadhaar, an IFSC or a label-anchored account number
+inside a clinical sentence is still covered. `NONBIOLOGICAL_LOCATION` is
+deliberately outside the protected set, which is what keeps
+`Sundaram Medical Centre` redacted; medical *history* labels are excluded
+for the same reason, since a history can name a person or a place.
+
+**The 0.5 score threshold is the part that needed measuring.** Without it
+the model tagged `PAN`, `Aadhaar`, `Passport`, `Blood Group` and
+`Health Insurance` as `DIAGNOSTIC_PROCEDURE` — form vocabulary on
+documents with no clinical content — all between 0.31 and 0.38, while
+every genuine clinical span scored 0.48 or better and the real vocabulary
+(`Metformin`, `Hemoglobin`, `TSH`, the dosages) scored 0.58 to 0.99. One
+threshold separates them, which is the practical argument for a scored
+model over a list of per-document rules. It cut withdrawals from 19 to 12
+and every one it removed was a false positive.
+
+**Measured on `documents/`, defaults vs `--protect-clinical`:**
+
+| | result |
+|---|---|
+| boxes withdrawn | 12, across 3 of 20 images (10 on the prescription) |
+| images byte-identical | 17 of 20 |
+| verdicts changed | 2 — `Atorvastatin 10 mg` and `Vitamin D3 60K` |
+| identifiers affected | **none** |
+| cost | +9s over a 13s run, after caching the model |
+
+Both changed verdicts are items the corpus annotates as PII and this flag
+exists to leave readable, so `compare_runs.py` reports them as
+regressions. That is the metric working correctly on a flag whose purpose
+it does not know about, not a fault.
+
+`compare_runs.py` also reported one *marginal catch* — an address on
+`15_job_application_form.png`. Withdrawing boxes cannot cover anything, so
+that is scorer noise on a partially-covered value, and it is recorded here
+as noise rather than quoted as a catch.
+
+**Performance bug found and fixed in the same change.** The first
+implementation built `MedicalNERRecognizer` inside the per-image call,
+loading a transformer from disk 20 times: 69s against a 13s baseline.
+Cached at module level and moved into the existing thread pool, the same
+work costs 9s.
+
+**Also corrected here:** the scorer's noise floor, re-measured. Scoring
+one run's images twice produced **0 of 77 verdicts flipped**, against the
+1 of 77 recorded on an earlier pair. Both samples stand; the band is
+0-1 items, and a single-item difference remains unresolved until it
+reproduces.
+
+**And:** `documents/` images 11-20 carried `"source": "real"` in the
+annotations, a leftover from believing they were photographs. They are
+OpenAI image-model generations that *imitate* photographed pages. The
+field now reads `photographic`, which describes appearance rather than
+asserting provenance; `_meta` had been correct all along.
+
+**Headline restated for the current defaults:** 94.4% core (68/72), 90.9%
+overall (70/77). The 97.2% quoted before this week's default changes was
+measured with `DATE_TIME` on and `ORGANIZATION` off and is not comparable.

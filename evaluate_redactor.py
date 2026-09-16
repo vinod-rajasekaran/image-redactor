@@ -208,6 +208,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--protect-clinical",
+        action="store_true",
+        help=(
+            "Keep medications, dosages, diagnoses and procedures readable by "
+            "withdrawing name/place/organisation boxes that land on them. For "
+            "documents a clinician or downstream model must still read. "
+            "Identifiers are never withdrawn — a checksum-validated Aadhaar "
+            "inside a clinical sentence is still covered. Needs transformers"
+        ),
+    )
+    parser.add_argument(
         "--dates",
         action="store_true",
         help=(
@@ -375,6 +386,7 @@ def main() -> None:
         "style": args.style,
         "merge_blocks": args.merge_blocks,
         "label_anchored": args.label_anchored,
+        "protect_clinical": args.protect_clinical,
         "visual_pii": args.visual_pii,
         "pyzbar": args.pyzbar,
         "wechat_qr": args.wechat_qr,
@@ -443,6 +455,7 @@ def main() -> None:
                 args.style,
                 args.merge_blocks,
                 args.label_anchored,
+                args.protect_clinical,
                 vlm=vlm_options,
             )
             results.append(result)
