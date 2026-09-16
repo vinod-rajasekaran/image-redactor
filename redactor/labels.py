@@ -88,6 +88,10 @@ STRONG_TERMS: frozenset[str] = frozenset({
 WEAK_TERMS: frozenset[str] = frozenset({
     "name", "address", "contact", "signature", "nominee", "guardian",
     "father", "mother", "husband", "spouse", "dob", "birth", "age",
+    # s/o, d/o, w/o — son/daughter/wife of. Ubiquitous on Indian forms, and
+    # the value beside one is a relative's name. Weak rather than strong, so
+    # an institutional qualifier still vetoes them.
+    "so", "do", "wo",
     "नाम", "पता", "हस्ताक्षर",
 })
 
@@ -178,10 +182,27 @@ _SPACES = re.compile(r"\s+")
 
 
 def normalise(text: str) -> str:
-    """Lowercase, strip punctuation, collapse spaces. Devanagari preserved."""
+    """Lowercase, strip punctuation, collapse spaces. Devanagari preserved.
+
+    Runs of single characters left behind by stripping punctuation are
+    rejoined: ``A/C No.`` becomes ``ac no``, not ``a c no``. Without this
+    the standard Indian abbreviation for an account — the one printed on
+    every cheque — splits into two letters that are not label vocabulary,
+    and the account number beside it is never anchored. ``S/O``, ``D/O``
+    and ``W/O`` rejoin the same way.
+
+    Multi-character tokens are untouched, so ``Tempat/Tgl Lahir`` stays
+    three words rather than collapsing into one.
+    """
     text = unicodedata.normalize("NFKC", text)
     text = _PUNCT.sub(" ", text)
-    return _SPACES.sub(" ", text).strip().lower()
+    words, merged = _SPACES.sub(" ", text).strip().lower().split(), []
+    for word in words:
+        if len(word) == 1 and merged and len(merged[-1]) <= 2 and merged[-1].isalpha():
+            merged[-1] += word
+        else:
+            merged.append(word)
+    return " ".join(merged)
 
 
 def _words(ocr: dict) -> list[dict]:

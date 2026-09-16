@@ -15,11 +15,19 @@ buys two things we could not get otherwise:
   text row and reported 0% for a field that was plainly blacked out.
   These boxes are trustworthy, so the measurement means something.
 
-Coverage answers a different question from `score_run.py` and does not
-replace it: "how much of this region did the redactor cover" rather than
-"can the PII still be read". A region at 85% can still leak, which is why
-the legibility score stays the headline — but a region well under 100% is
-a concrete, deterministic warning with no model call involved.
+**Coverage is weak on this corpus, and the reason is specific.** The
+publishers' regions span whole form rows: an `acno` box is ~730x95 and
+contains the printed "A/C NO." label, the cell border and the bank's
+watermark as well as the number; a `name` box is ~2260 wide, the entire
+"PAY ......... OR BEARER" line, of which a handwritten name occupies about
+a fifth. A correct redaction therefore scores around 20% by area, and no
+better by ink, because the ink includes the label and the watermark we are
+right not to cover.
+
+So a low coverage number here is **not** evidence the value is exposed.
+Use `--legibility`, which asks a vision model what remains readable and
+needs no ground-truth text. Coverage is retained only as a cheap,
+model-free signal of where to look.
 
 Three of the six annotated fields are personal data by this project's
 definition: the payee name, the account number, and the signature. IFSC
@@ -32,7 +40,8 @@ slice; it overwrites the committed annotations, so `git checkout` the
 corpus afterwards if you want the tracked set back.
 
 Usage:
-    python cheque_benchmark.py --score runs/cheques # coverage for a run
+    python cheque_benchmark.py --legibility runs/cheques  # what is readable
+    python cheque_benchmark.py --score runs/cheques       # region coverage
     python cheque_benchmark.py --limit 40           # fetch a larger slice
 """
 from __future__ import annotations
@@ -60,7 +69,8 @@ PARQUET_URL = (
 # in a folder named for text corpora was both misleading and the only
 # reason that folder was excluded from git.
 CACHE = datasets.ROOT / ".cache" / "cheques_test.parquet"
-IMAGE_DIR = datasets.ROOT / "cheques" / "images"
+CORPUS = "cheques"
+IMAGE_DIR = datasets.ROOT / CORPUS / "images"
 REGIONS = datasets.ROOT / "cheques" / "annotations.json"
 
 # field -> (our entity type, tier). Only fields that identify a person.
@@ -200,13 +210,124 @@ def score(run_dir: Path) -> None:
     )
 
 
+LEGIBILITY_PROMPT = """This is a bank cheque image used to test a privacy \
+redaction tool. Parts of it may be blacked out.
+
+For each element below, say whether it is STILL READABLE in this image:
+
+- payee_name      the name written after "PAY"
+- account_number  the digits in the A/C NO. box
+- signature       the handwritten signature
+- ifsc            the IFS / IFSC code of the branch
+- amount          the amount in figures
+- micr            the machine-readable digits along the bottom edge
+
+Answer "readable" only if you can actually make out the value. Answer \
+"covered" if it is blacked out, or if only a fragment too short to be \
+useful remains. Answer "absent" if the element is not on this cheque.
+
+Judge only what you can see. Do not guess at what is under a black box."""
+
+LEGIBILITY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "elements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "element": {"type": "string"},
+                    "state": {"type": "string",
+                              "enum": ["readable", "covered", "absent"]},
+                },
+                "required": ["element", "state"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["elements"],
+    "additionalProperties": False,
+}
+
+
+def legibility(run_dir: Path) -> None:
+    """Ask a vision model what is still readable — the metric that counts.
+
+    Region coverage cannot answer this on cheques: the publishers' boxes
+    span whole form rows, so they include the printed label, the border and
+    the bank's watermark. A perfectly covered account number scores about
+    20% by area, and no better by ink. Legibility asks the question
+    directly, and needs no ground-truth text.
+
+    Both the original and the redacted image are read, so an element that
+    was never legible cannot be counted as a redaction success.
+    """
+    import collections
+
+    from redactor import vision
+
+    corpus = datasets.load(CORPUS)
+    images = run_dir / "images"
+    client = vision.build_client()
+
+    def read(path: Path) -> dict:
+        response = client.messages.create(
+            model=vision.DEFAULT_MODEL,
+            max_tokens=2048,
+            thinking={"type": "adaptive"},
+            output_config={"format": {"type": "json_schema",
+                                      "schema": LEGIBILITY_SCHEMA}},
+            messages=[{"role": "user", "content": [
+                vision.encode_image(path),
+                {"type": "text", "text": LEGIBILITY_PROMPT}]}],
+        )
+        text = next(b.text for b in response.content if b.type == "text")
+        return {e["element"]: e["state"] for e in json.loads(text)["elements"]}
+
+    tally = collections.defaultdict(lambda: {"covered": 0, "leaked": 0})
+    for name, path, _ in corpus.items():
+        redacted = images / name
+        if not redacted.exists():
+            continue
+        before, after = read(path), read(redacted)
+        for element, state_before in before.items():
+            if state_before != "readable":
+                continue        # never legible: not ours to claim either way
+            if after.get(element) == "readable":
+                tally[element]["leaked"] += 1
+            else:
+                tally[element]["covered"] += 1
+
+    table = Table(title=f"Cheque legibility — {run_dir}")
+    table.add_column("element", style="cyan")
+    table.add_column("readable before", justify="right")
+    table.add_column("covered", justify="right", style="bold")
+    table.add_column("still readable", justify="right")
+    for element, counts in sorted(tally.items(),
+                                  key=lambda kv: -sum(kv[1].values())):
+        n = counts["covered"] + counts["leaked"]
+        table.add_row(element, str(n),
+                      f"{counts['covered'] / n * 100:.0f}%" if n else "-",
+                      str(counts["leaked"]))
+    console.print(table)
+    console.print(
+        "\n[dim]Legibility, not area. A cheque's annotated regions span whole "
+        "form rows, so coverage understates a correct redaction.[/dim]"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--score", default=None, metavar="RUN_DIR")
+    parser.add_argument("--legibility", default=None, metavar="RUN_DIR",
+                        help="ask a vision model what is still readable — the "
+                             "metric region coverage cannot answer here")
     args = parser.parse_args()
 
-    if args.score:
+    if args.legibility:
+        legibility(Path(args.legibility))
+    elif args.score:
         score(Path(args.score))
     else:
         fetch(args.limit)
