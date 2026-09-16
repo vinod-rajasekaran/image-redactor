@@ -17,6 +17,56 @@ measurable — the naive answers turned out to be wrong six times.
 > [SOURCES.md](SOURCES.md) is every dataset and model, its licence as
 > checked, and what it is for.
 
+## Why this was built
+
+Point Presidio's image redactor at an Indian document and several things
+go wrong quietly. A stock `AnalyzerEngine()` loads **only US and UK
+recognizers** — the Aadhaar, PAN, voter and GSTIN recognizers ship with
+Presidio but are never registered, so those numbers pass straight through.
+It redacts **only OCR'd text**, leaving the ID photograph, the QR code,
+the barcode and the signature untouched — and an Aadhaar QR encodes the
+holder's name, date of birth and address, so blacking out the printed
+number while leaving the code intact is not redaction at all. Its Aadhaar
+recognizer **discards** checksum failures rather than scoring them low, so
+a single OCR digit error leaves a real Aadhaar fully visible. And it
+reports what it *detected*, which is not the same question as what is
+still readable.
+
+So this adds the India recognizers, a threshold set for Presidio's own
+context-boost arithmetic, an OCR-tolerant Aadhaar path, detection of
+faces, codes and signatures, label-anchored redaction that covers the
+value beside a personal-data label whatever shape it takes, reading-order
+and preprocessing fixes for photographed pages, and EXIF/GPS/thumbnail
+stripping on the way out. Above all it adds the **measurement**: scoring
+asks whether each known item is still legible in the output, because a box
+can cover most of a value and still leak it.
+
+### Why not a layout model, or just a vision model
+
+A **YOLO document-layout model** was tested and rejected. It finds
+*regions* — title, table, figure — not personal data, and no layout class
+distinguishes an account number from an invoice number. Training one for
+this would need annotated Indian PII documents, which is precisely what
+does not exist. It also carries AGPL-3.0, which would have been the only
+copyleft dependency here and attaches to anything deployed as a service.
+
+A **vision model** reads these documents better than any OCR stack — this
+project uses one to *score* output, and it finds leaks OCR misses. But
+redaction needs pixels, not readings: knowing a number is on the page does
+not say what to black out, and vision-generated boxes were measured here
+sitting about a text row off. It also offers no checksum, no auditable
+reason a box was drawn, and on commodity hardware it is orders of
+magnitude slower. It is wired in as an optional extra pass
+([`--vlm`](#a-vision-model-as-a-second-pass)), unioned rather than
+substituted, so a model being wrong can only add a box.
+
+**Where this delivers:** Indian document formats that stock Presidio does
+not cover; the non-text PII that text redaction leaves behind; and an
+honest answer to whether redaction worked, on data this project did not
+produce. What it does **not** deliver is a solved problem — cheques,
+handwriting and Devanagari remain substantially unsolved, and
+[VALIDATION.md](VALIDATION.md) lists what is still unmeasured.
+
 ## Current result
 
 **93.5% of known PII redacted** — 72 of 77 items across 20 documents, with
