@@ -65,7 +65,7 @@ A local evaluation harness for Presidio's image redaction, aimed at Indian
 documents. OCR, detection and redaction run on-device. The only network
 call is to Claude, and only for *scoring* — never for redaction.
 
-Current result: **94.4% of core PII redacted** (68/72 across 20
+Current result: **95.8% of core PII redacted** (69/72 across 20
 documents), 90.9% overall (70/77), vision-scored. The five
 `sensitive`-tier items — diagnoses and medications — go 2/5 to 5/5 with
 `--medical-ner`, which is off by default because it pulls in torch.
@@ -125,7 +125,7 @@ be.
 `pack/` and `generated/` — were deleted in September 2026 for exactly that
 reason: the recognizers and the test data had the same author, so they
 agreed with each other and not with reality. `documents/` stays, but it is
-familiar material and its 94.4% is a ceiling, not a measurement. Evidence
+familiar material and its 95.8% is a ceiling, not a measurement. Evidence
 for a change must come from data nobody here produced: the cheque images,
 IndiaPII-Bench, or maskara.
 
@@ -175,6 +175,18 @@ scored against, and four never fired once across 67 pages. The bar now is:
 convention with sources disagreeing on RTO-code length) and is kept on
 notice. Anything else is a label problem, not a pattern one — see
 `labels.py`.
+
+**Reading order is a detection lever, not cosmetics.** Presidio flattens
+the OCR word list into one string, so row grouping decides whether
+`4587 6321 9876` is even *adjacent* — and a 12-digit Aadhaar that is not
+adjacent does not match, at any threshold. Row assignment therefore takes
+the **nearest** row measured against a running mean, not the first row
+within a seed word's band: a single high, short OCR noise token was able
+to steal the last digit group from a tilted line and silently disable
+`IN_AADHAAR` for two commits. `test_labels.py` pins the case with the real
+coordinates. Re-score `documents/` **and** `cheques/` after touching this
+file; upscale factor changes what Tesseract emits, so a change that looks
+inert at 2x can break at 3x.
 
 **Entity counts are a bad metric.** Both misses and false positives move
 them. Two Paddle bugs looked like improvements by that measure. Score

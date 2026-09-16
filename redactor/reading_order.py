@@ -55,25 +55,49 @@ def reorder_reading_order(result: dict, row_tolerance: float = 0.6) -> dict:
     if len(items) < 2:
         return result
 
-    # Group into rows: a word joins the current row while its vertical
-    # centre stays within a fraction of the row's typical height.
+    # Group into rows: a word joins the row whose vertical centre is
+    # **nearest**, among those within a fraction of the row's typical
+    # height.
+    #
+    # Nearest, not first-within-tolerance, and measured against the row's
+    # running mean rather than its seed word. Both details are load-bearing
+    # and were fixed after a leak: on a tilted Aadhaar card the OCR emitted
+    # a garbage token `OVS` (height 43) just above the number, which seeded
+    # a row whose band reached down far enough to capture `9876` while
+    # `4587 6321` fell into the next row. Flattened, that reads
+    # `9876 OVS 4587 6321`, the 4-4-4 grouping never forms, and IN_AADHAAR
+    # does not fire at all. Seeding on one word lets whichever word happens
+    # to sit highest — often OCR noise, whose height is arbitrary — decide
+    # the band for the whole line.
     order = sorted(items, key=lambda i: (tops[i], lefts[i]))
     rows: list[list[int]] = []
+    centres: list[float] = []   # running mean centre, parallel to rows
+    row_heights: list[float] = []   # running mean height, parallel to rows
     for i in order:
         centre = tops[i] + heights[i] / 2
-        placed = False
-        for row in rows:
-            ref = row[0]
-            ref_centre = tops[ref] + heights[ref] / 2
-            if abs(centre - ref_centre) <= max(heights[ref], 1) * row_tolerance:
-                row.append(i)
-                placed = True
-                break
-        if not placed:
+        best, best_gap = None, None
+        for r, row_centre in enumerate(centres):
+            gap = abs(centre - row_centre)
+            limit = max(row_heights[r], heights[i], 1) * row_tolerance
+            if gap <= limit and (best_gap is None or gap < best_gap):
+                best, best_gap = r, gap
+        if best is None:
             rows.append([i])
+            centres.append(centre)
+            row_heights.append(float(heights[i]))
+        else:
+            n_row = len(rows[best])
+            rows[best].append(i)
+            centres[best] = (centres[best] * n_row + centre) / (n_row + 1)
+            row_heights[best] = (
+                row_heights[best] * n_row + heights[i]
+            ) / (n_row + 1)
 
+    # Rows are emitted by vertical position, not by creation order: a row
+    # created early by a high, short token must not outrank the line it
+    # was later merged alongside.
     flat: list[int] = []
-    for row in rows:
+    for _, row in sorted(zip(centres, rows), key=lambda pair: pair[0]):
         flat.extend(sorted(row, key=lambda i: lefts[i]))
 
     return {key: [values[i] for i in flat] for key, values in result.items()

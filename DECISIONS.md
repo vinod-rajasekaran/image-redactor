@@ -2425,3 +2425,95 @@ asserting provenance; `_meta` had been correct all along.
 **Headline restated for the current defaults:** 94.4% core (68/72), 90.9%
 overall (70/77). The 97.2% quoted before this week's default changes was
 measured with `DATE_TIME` on and `ORGANIZATION` off and is not comparable.
+
+---
+
+## 2026-09-16 — Correction: an Aadhaar number was leaked for two commits, and the cause was mine
+
+**Status:** Active — fixes `reading_order.py`; supersedes the diagnosis in
+the `DATE_TIME` entry above
+
+`11_aadhaar_card.png` was exposing `6321 9876` — 8 of its 12 digits — and
+its date of birth, on the default configuration. Bisected by re-running
+that one image at each commit:
+
+| commit | upscale | entities found | number |
+|---|---:|---|---|
+| `040f685` … `3193d84` | 2x | `IN_AADHAAR`, DATE_TIME, PERSON | covered |
+| `eda4de0` upscale by character height | **3x** | **no `IN_AADHAAR`** | covered by accident |
+| `273f57c` `DATE_TIME` off | 3x | no `IN_AADHAAR` | **leaked** |
+
+**Root cause, and it is not what the previous entry said.** That entry
+blamed "OCR reads the number out of order" and called it "an OCR failure
+the entity change merely stopped masking". The reading order was wrong,
+but it was wrong *because of a bug in `reading_order.py`*, and `eda4de0`
+introduced it two commits earlier by raising this card's upscale factor
+from 2 to 3.
+
+Words were assigned to the **first** row whose vertical band they fell
+into, in row-creation order, with the band taken from whichever word
+seeded the row. On this tilted card Tesseract emits a garbage token just
+above the number — `ae` (height 104) at 2x, `OVS` (height 43) at 3x. At
+2x the tall token's band swallowed all three digit groups, so the line
+came out intact by luck. At 3x the shorter token's band reached far enough
+to capture `9876` alone, stranding `4587 6321` in the row below:
+
+```
+2x  row seed 'ae'  h=104 tol=62.4 -> ['4587', '6321', '9876', 'ae']
+3x  row seed 'OVS' h=43  tol=25.8 -> ['9876', 'OVS'] + ['4587', '6321']
+```
+
+Flattened that reads `9876 OVS 4587 6321`, the 4-4-4 grouping never forms,
+and `IN_AADHAAR` does not fire at all. The number stayed covered only
+because `DATE_TIME` boxes happened to land on the digit groups; removing
+`DATE_TIME` removed the accident.
+
+**Fix:** a word joins the row whose centre is **nearest** among those
+within tolerance, the band is measured against the row's **running mean**
+centre and height rather than its seed word, and rows are emitted ordered
+by that centre rather than by creation order. A single high, short token
+can no longer set the band for a whole line.
+
+**Measured, `documents/` (vision-scored, before -> after):**
+
+| | before | after |
+|---|---|---|
+| core | 68/72 (94.4%) | **69/72 (95.8%)** |
+| overall | 70/77 (90.9%) | 70/77 (90.9%) |
+| `4587 6321 9876` | leaked | **redacted** |
+| `Atorvastatin 10 mg` | redacted | leaked |
+
+The one item traded away is clinical content on a prescription, which is
+what `--protect-clinical` exists to keep readable anyway. Trading a
+covered drug name for a covered Aadhaar is the right direction for a
+default.
+
+**Measured, `datasets/cheques/` (legibility, same code A/B):**
+
+| element | before | after |
+|---|---:|---:|
+| payee name | 90% | 80% |
+| account number | 70% | 70% |
+| signature | 80% | 90% |
+| IFSC | 100% | 100% |
+| MICR | 70% | **40%** |
+
+Ten images, so one image is 10 points and the PII fields are a wash. MICR
+is the one real movement and is **not** counted as personal data here
+(like IFSC, it identifies an account route rather than a person), but it
+is recorded rather than passed over.
+
+**Cross-check, `datasets/ktp/`:** 46/180 regions fully covered, against
+44/180 documented. No regression.
+
+**Still leaking on that card: the date of birth.** Label anchoring cannot
+reach it, because Tesseract reads the label `DOB:` as `pos:` on this
+low-contrast tilted card — there is no label left to anchor to. Adding
+`pos` to the lexicon would be an overfit to one image of exactly the kind
+this project has removed before, and `pos` is a real word. `--dates`
+covers it; that remains the trade recorded in the `DATE_TIME` entry.
+
+**Headline corrected, twice in one day.** 94.4% core was published this
+morning after the defaults change and is superseded by **95.8% (69/72)**,
+90.9% overall (70/77). The 97.2% before that was measured with
+`DATE_TIME` on and `ORGANIZATION` off and is not comparable to either.

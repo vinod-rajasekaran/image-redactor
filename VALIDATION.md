@@ -44,12 +44,12 @@ with reality, and the scores split exactly along that line:
 
 | corpus | produced by | score |
 |---|---|---|
-| `documents/` | this project | 94.4% core |
+| `documents/` | this project | 95.8% core |
 | `pack/` | this project | 90% |
 | `generated/` | this project | 79.0% |
 | IndiaPII-Bench | independent | 76.6% |
 | maskara | independent | 82.7% |
-| cheques | independent | **payee name 60%, account number 40%** (legibility) |
+| cheques | independent | **payee name 80%, account number 70%** (legibility) |
 
 `pack/` and `generated/` were deleted rather than kept as benchmarks, and
 the generator that made them was deleted with them, so that no later
@@ -66,22 +66,22 @@ session could reach for it.
 | recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **76.6% recall** |
 | recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **82.7% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
-| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | tesseract: IFSC 100%, payee 60%, signature 60%, account 40% · **paddle: account 100%, payee 90%** |
-| label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **44/180 fully covered, vs 12/180 with the mechanism off** |
+| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | tesseract: IFSC 100%, signature 90%, payee 80%, account 70% · **paddle: account 100%, payee 90%** |
+| label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **46/180 fully covered, vs 12/180 with the mechanism off** |
 
 ### Project-produced evidence, and therefore weaker
 
 | what | data | result |
 |---|---|---|
-| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **94.4% core** (68/72), 90.9% overall; the sensitive tier goes 2/5 -> 5/5 with `--medical-ner` |
-| clinical protection | `documents/`, defaults vs `--protect-clinical`, vision-scored | 12 boxes withdrawn on 3 images; the only verdicts that changed are the two drug names the flag exists to preserve, and no identifier moved |
+| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **95.8% core** (69/72), 90.9% overall; the sensitive tier goes 2/5 -> 5/5 with `--medical-ner` |
+| clinical protection | `documents/`, defaults vs `--protect-clinical`, vision-scored | 5 boxes withdrawn; the only verdict that changed is a drug name the flag exists to preserve, and no identifier moved |
 | label geometry | hand-built OCR dicts, `test_labels.py` | 17 checks pass |
 | clinical suppression rule | hand-built boxes, `test_clinical.py` | 13 checks pass |
 | metadata hygiene | synthetic EXIF/GPS fixtures, `test_metadata_stripping.py` | 3 checks pass |
 
 `documents/` is kept because it is the original corpus, its 77 items were
 audited by an independent vision pass, and its leaks are documented. But
-**94.4% is a ceiling on familiar material, not performance.**
+**95.8% is a ceiling on familiar material, not performance.**
 
 ---
 

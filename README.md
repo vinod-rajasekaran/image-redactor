@@ -68,12 +68,15 @@ handwriting and Devanagari remain substantially unsolved, and
 
 ## Current result
 
-**94.4% of core PII redacted** — 68 of 72 items across 20 documents,
+**95.8% of core PII redacted** — 69 of 72 items across 20 documents,
 vision-scored by showing every redacted output to Claude and asking what
 remains readable. Overall, including the sensitive tier: 90.9% (70/77).
 
-The four core leaks are a date of birth and a checksum-invalid Aadhaar on
-one photographed card, and a name and an address on one photographed form.
+The three core leaks are a date of birth on one photographed card, and a
+name and an address on one photographed form. The date of birth is the
+one case `--dates` recovers that label anchoring cannot: Tesseract reads
+the label `DOB:` as `pos:` on that card, so there is no label left to
+anchor to.
 
 The corpus also carries 5 `sensitive`-tier items — diagnoses and
 medications. Those need `--medical-ner`, which is **off by default**
@@ -91,15 +94,16 @@ data nobody here produced, the tool scores far lower:
 
 | data | independent? | result |
 |---|---|---|
-| `documents/` — drawn here | no | 94.4% core redacted |
+| `documents/` — drawn here | no | 95.8% core redacted |
 | IndiaPII-Bench, 2,000 docs | yes | 76.6% recall |
 | maskara, 2,600 docs | yes | 82.7% recall |
-| cheques, 10 images | yes | **payee name 60%, account number 40%** |
+| cheques, 10 images | yes | **payee name 80%, account number 70%** |
 
 The cheques are the sharpest case: handwriting throughout, which both OCR
 engines read poorly. Scored by legibility — what a reader can still make
-out — the payee name is covered on 6 of 10, the account number on 4, the
-signature on 6, and the branch IFSC on 10. See
+out — the payee name is covered on 8 of 10, the account number on 7, the
+signature on 9, and the branch IFSC on 10. One image is ten points on a
+corpus this size, so read those as approximate. See
 [the cheque benchmark](#benchmarks).
 
 **Corpora this project generated are not used as evidence.** Recognizers
@@ -287,14 +291,13 @@ what it guesses at is form vocabulary: on the documents corpus it tagged
 `DIAGNOSTIC_PROCEDURE`, all between 0.31 and 0.38, while every genuine
 clinical span scored 0.48 or better and the real vocabulary — `Metformin`,
 `Hemoglobin`, `TSH`, the dosages — scored 0.58 to 0.99. Thresholding at
-0.5 halves the withdrawals on the corpus, from 19 to 12, and every one
-removed was a false positive.
+0.5 removes the false-positive withdrawals and keeps every true one.
 
-**Measured cost:** on the 20-document corpus, 12 boxes withdrawn across 3
-images, `+9s` over the whole run, and the only two items that changed
-verdict are `Atorvastatin 10 mg` and `Vitamin D3 60K` — which the corpus
-annotates as PII and this flag exists to leave readable. No identifier
-changed verdict. Needs `transformers`, like `--medical-ner`.
+**Measured cost:** on the 20-document corpus, 5 boxes withdrawn across 2
+images, `+9s` over the whole run, and the only item that changes verdict
+is `Vitamin D3 60K` — which the corpus annotates as PII and this flag
+exists to leave readable. No identifier changes verdict. Needs
+`transformers`, like `--medical-ner`.
 
 ## What it detects
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sys
 
+from redactor.reading_order import reorder_reading_order
 from redactor.labels import (
     detect_labelled_values,
     find_labels,
@@ -112,6 +113,32 @@ def main() -> int:
     ok &= check("scale divides back to original-image space",
                 detect_labelled_values(two_col, scale=2)[0].left == 200)
     ok &= check("empty OCR is handled", detect_labelled_values(ocr([])) == [])
+
+    # Reading order. A leak, not a tidiness concern: on a tilted Aadhaar
+    # card Tesseract emitted a garbage token just above the number whose
+    # row band reached down and captured the last digit group alone,
+    # stranding the first two in the row below. Flattened that reads
+    # "9876 OVS 4587 6321", the 4-4-4 grouping never forms, and IN_AADHAAR
+    # does not fire at all. Heights and tops here are the real ones, at 3x.
+    tilted = ocr([
+        ("OVS", 858, 895, 40, 43),          # OCR noise, sits highest
+        ("4587", 284, 918, 125, 52),
+        ("6321", 431, 909, 118, 52),
+        ("9876", 576, 901, 126, 52),
+    ])
+    words = [w for w in reorder_reading_order(tilted)["text"] if w.strip()]
+    joined = " ".join(words)
+    ok &= check("a tilted row is not split by a high, short noise token",
+                "4587 6321 9876" in joined, joined)
+
+    # The rule that makes that work must not fuse genuinely separate lines.
+    two_lines = ocr([
+        ("Name", 100, 100, 60, 20), ("Anita", 200, 100, 60, 20),
+        ("Mobile", 100, 400, 70, 20), ("9876543210", 200, 400, 120, 20),
+    ])
+    words = [w for w in reorder_reading_order(two_lines)["text"] if w.strip()]
+    ok &= check("distant rows stay separate",
+                words == ["Name", "Anita", "Mobile", "9876543210"], words)
 
     print("\nPASSED" if ok else "\nFAILED")
     return 0 if ok else 1
