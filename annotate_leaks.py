@@ -221,8 +221,11 @@ def main() -> None:
         )
 
     console.print(
-        f"\n[bold]{total_visible} PII items still visible[/bold] across "
-        f"{len(truth)} images"
+        f"\n[bold]{total_visible} PII items to check by eye[/bold] across "
+        f"{len(truth)} images — OCR read them as leaked *or* could not "
+        f"confirm them redacted. Unverifiable is not the same as visible: "
+        f"vision scoring resolves these, and typically confirms most as "
+        f"covered."
     )
     console.print(f"[green]Annotated images written to[/green] {scored_dir}")
 

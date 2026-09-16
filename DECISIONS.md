@@ -1900,3 +1900,64 @@ silently deleting `build_registry`, `build_custom_recognizers` and the
 checksum helpers. Caught by an import error immediately; restored from
 git. Slicing a file by `.index()` assumes an ordering that a previous edit
 may have changed.
+
+---
+
+## 2026-09-16 — Fresh run on both corpora; the cheque metric was misleading
+
+**Status:** Active — supersedes the `0 of 30 regions fully covered` claim
+
+Both corpora re-run and vision-scored with the current stack.
+
+**Documents: 70/72 core = 97.2%.** The two remaining core leaks are a name
+and a phone number on one photographed form. The other five leaks are all
+`sensitive` tier — diagnoses and medications — and `--medical-ner` takes
+those from **0/5 to 5/5**, putting the overall figure at **97.4% (75/77)**.
+That flag stays off by default because it pulls in torch, but the cost of
+leaving it off is now measured rather than assumed.
+
+**Two label-vocabulary gaps found by the run, not by reading the code:**
+
+- `Doctor Reg. No.` never anchored, because **`reg` was not vocabulary
+  while `registration` was** — the same morphology failure that cost 56%
+  recall before token matching replaced exact-phrase matching. `doctor`
+  was missing too. Both added; IndiaPII precision unchanged at 100% / 97.2%.
+- `A/C NO.` normalised to `a c no`: stripping the slash split the standard
+  Indian abbreviation for an account into two single letters. `normalise()`
+  now rejoins runs of single characters, which also fixes `S/O`, `D/O`,
+  `W/O`.
+
+### The cheque claim was wrong, and the metric was the reason
+
+`0 of 30 regions fully covered` has been this project's headline evidence
+that the documents figure does not generalise. The account number is in
+fact **fully covered** — confirmed by drawing it — while the metric
+reported 22%.
+
+The publishers' regions span whole form rows, so they contain the printed
+label, the cell border and the bank's watermark as well as the value. A
+correct redaction scores about 20% by construction. Ink coverage is no
+better: the ink includes the label and watermark.
+
+Measured by legibility instead — `cheque_benchmark.py --legibility`, which
+reads both the original and the redacted image so an element that was
+never legible cannot be counted as a success:
+
+| element | covered |
+|---|---:|
+| branch IFSC | 10/10 |
+| payee name | 6/10 |
+| signature | 6/10 |
+| MICR line | 6/10 |
+| account number | 4/10 |
+
+Cheques remain the weakest case and handwriting remains the reason, but
+the failure was smaller than reported and the error was in the measurement.
+
+**`annotate_leaks.py` overstated too.** It prints items OCR read as leaked
+*or* could not confirm redacted, and called the total "still visible".
+Unverifiable is not visible: it reported 15 where vision found 7. The
+wording now says "to check by eye" and explains the difference.
+
+**Runs kept for inspection:** `runs/documents`, `runs/documents_medner`,
+`runs/cheques`, each with `scored/` images where failures are outlined.

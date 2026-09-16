@@ -32,12 +32,12 @@ with reality, and the scores split exactly along that line:
 
 | corpus | produced by | score |
 |---|---|---|
-| `documents/` | this project | 93.5% |
+| `documents/` | this project | 97.2% core |
 | `pack/` | this project | 90% |
 | `generated/` | this project | 79.0% |
 | IndiaPII-Bench | independent | 76.6% |
 | maskara | independent | 82.7% |
-| cheques | independent | **0 of 30 regions fully covered** |
+| cheques | independent | **payee name 60%, account number 40%** (legibility) |
 
 `pack/` and `generated/` were deleted rather than kept as benchmarks, and
 the generator that made them was deleted with them, so that no later
@@ -54,20 +54,20 @@ session could reach for it.
 | recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **76.6% recall** |
 | recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **82.7% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
-| region coverage on images | 10 cheques, 30 regions, boxes drawn by the publishers | third party | Apache-2.0 | **0 of 30 fully covered** |
+| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | **IFSC 100%, payee name 60%, signature 60%, account number 40%** |
 | label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **44/180 fully covered, vs 12/180 with the mechanism off** |
 
 ### Project-produced evidence, and therefore weaker
 
 | what | data | result |
 |---|---|---|
-| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | 93.5%, 5 leaks |
+| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **97.2% core** (70/72); 97.4% overall with `--medical-ner` |
 | label geometry | hand-built OCR dicts, `test_labels.py` | 17 checks pass |
 | metadata hygiene | synthetic EXIF/GPS fixtures, `test_metadata_stripping.py` | 3 checks pass |
 
 `documents/` is kept because it is the original corpus, its 77 items were
 audited by an independent vision pass, and its leaks are documented. But
-**93.5% is a ceiling on familiar material, not performance.**
+**97.2% is a ceiling on familiar material, not performance.**
 
 ---
 
@@ -347,3 +347,34 @@ python test_metadata_stripping.py     # EXIF/GPS/thumbnail stripping
 
 The text benchmarks need their corpora downloaded first — see each
 script's docstring. The cheques are committed.
+
+---
+
+## Correction — cheque region coverage was misread as failure
+
+`0 of 30 regions fully covered` was quoted here and in `README.md` as the
+headline proof that the documents figure does not generalise. It does not
+mean what it was taken to mean.
+
+The publishers' regions span whole form rows. An `acno` box is ~730×95 and
+contains the printed "A/C NO." label, the cell border and the bank's
+watermark as well as the number; a `name` box is ~2,260 wide — the entire
+"PAY ......... OR BEARER" line — of which a handwritten name occupies about
+a fifth. **A correct redaction scores around 20% by construction.** Ink
+coverage was tried as a fix and is no better, because the ink includes the
+label and the watermark that should not be covered.
+
+Measured by legibility instead — what a reader can still make out, which
+needs no ground-truth text:
+
+| element | covered |
+|---|---:|
+| branch IFSC | **10/10** |
+| payee name | 6/10 |
+| signature | 6/10 |
+| MICR line | 6/10 |
+| account number | 4/10 |
+
+Cheques remain by far the weakest case, and handwriting remains the
+reason. But "nothing is covered" was wrong, and the error was in the
+metric rather than in the redactor.

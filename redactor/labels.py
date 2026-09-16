@@ -72,7 +72,7 @@ STRONG_TERMS: frozenset[str] = frozenset({
     "survey", "khasra", "khesra", "khata", "khatauni", "khewat", "dag",
     "jamabandi", "patta", "chitta", "pahani", "satbara", "plot", "deed",
     # vehicle
-    "vehicle", "registration", "chassis", "engine", "rc",
+    "vehicle", "registration", "reg", "chassis", "engine", "rc",
     # Devanagari
     "आधार", "मोबाइल", "पैन", "खाता", "दूरभाष",
     # Indonesian, for the KTP corpus that tests the geometry half. These are
@@ -88,6 +88,9 @@ STRONG_TERMS: frozenset[str] = frozenset({
 WEAK_TERMS: frozenset[str] = frozenset({
     "name", "address", "contact", "signature", "nominee", "guardian",
     "father", "mother", "husband", "spouse", "dob", "birth", "age",
+    # A professional's name is still a person's name. `annotate_inputs.py`
+    # surfaced a prescribing doctor as an item the ground truth had missed.
+    "doctor", "physician", "surgeon", "practitioner", "nurse",
     # s/o, d/o, w/o — son/daughter/wife of. Ubiquitous on Indian forms, and
     # the value beside one is a relative's name. Weak rather than strong, so
     # an institutional qualifier still vetoes them.
