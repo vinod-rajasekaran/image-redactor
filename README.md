@@ -177,18 +177,9 @@ The default threshold is a deliberate divergence — see below.
 
 ## A vision model as a second pass
 
-Most of this pipeline is a hand-rolled substitute for reading a document —
-preprocessing variants because OCR is fragile, a reading-order re-sort
-because OCR flattens layout, label geometry because forms pair labels with
-values, recognizers because a regex cannot know what a name is. A vision
-model does all four natively, and this project's own evidence points that
-way: `vision_score.py` uses one to read redacted output and it finds leaks
-that OCR and a careful manual pass both miss.
-
-It is wired in as **another parallel path, unioned** — not a replacement.
-The deterministic layer keeps what only it offers: a Verhoeff checksum on
-Aadhaar, IFSC's fixed `0`, and an auditable reason each box was drawn. A
-model being wrong can then only add a box, never remove one.
+A fourth parallel path, unioned with the OCR variants and the visual
+detectors — [not a replacement](#why-not-a-layout-model-or-just-a-vision-model).
+Off by default.
 
 ```bash
 ollama serve
@@ -265,6 +256,9 @@ These are covered by [label-anchored redaction](#why-the-defaults-are-what-they-
 the value beside `Account Number`, `UHID` or `खाता संख्या` is redacted
 whatever shape it takes. On independent Indian forms the lexicon reaches
 100% recall at 97.2% precision.
+
+Anchoring on a label depends on OCR emitting that label near its value, so
+**re-score after changing OCR backend or PSM**.
 
 **The bar for adding a pattern here: cite the published specification.** A
 format that cannot be sourced is a label problem, not a pattern one.
@@ -371,21 +365,6 @@ Every default rests on measured evidence, and several are deliberately
 | that fallback has **no regex guards** | Guards would stop it matching inside card numbers | OCR flattens the page and destroys field boundaries; guards dropped real Aadhaars |
 | spaCy `en_core_web_lg` | A newer NER model sounds better | Aadhaar/PAN/voter are regex+checksum, not NER. It also matches kaapi-guardrails' production validator |
 
-## Indian entity support
-
-Presidio ships India recognizers but **registers none by default** — a
-stock `AnalyzerEngine()` loads only US/UK ones. All six are registered
-here: `IN_AADHAAR`, `IN_PAN`, `IN_VOTER`, `IN_PASSPORT`,
-`IN_VEHICLE_REGISTRATION`, `IN_GSTIN`.
-
-`redactor/recognizers.py` adds eight more, each carrying its published
-specification in the docstring — see [what it detects](#what-it-detects)
-for the full list and per-entity recall.
-
-Where a value has **no national format**, no pattern is written for it.
-Those are anchored on their label instead, which depends on OCR putting
-the label near its value: **re-score after changing OCR backend or PSM**.
-
 ## Licence
 
 **Code: [MIT](LICENSE).**
@@ -395,7 +374,7 @@ the label near its value: **re-score after changing OCR backend or PSM**.
 
 | | |
 |---|---|
-| `datasets/documents/` | Fully synthetic and freely redistributable. Images 01–10 and every annotation are authored here and are MIT. Over the raw OpenAI-generated output in 11–20 no copyright is asserted — purely AI-generated images generally cannot be copyrighted for want of human authorship — so nothing restricts redistribution. |
+| `datasets/documents/` | Fully synthetic and freely redistributable. **Every image and annotation in it is AI-generated**: 01–10 rendered by a script Claude wrote, with values Claude chose; 11–20 by an OpenAI image model; the annotations by Claude, audited by a person. Purely AI-generated work generally cannot be copyrighted for want of human authorship, so no copyright is asserted over any of it and nothing restricts redistribution. The MIT grant covers the code and the human-directed selection and curation. |
 | `datasets/cheques/` | Apache-2.0, from [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images). Attribution is in the corpus `_meta`. |
 | `datasets/text/` | Third-party, **not committed**, fetched on demand: IndiaPII-Bench (CC-BY-4.0) and maskara-indian-pii-200k (MIT). |
 
@@ -548,7 +527,7 @@ spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
   every one.
 - **Signatures** are found only when a printed cue word sits nearby;
   13/20 on cheques.
-- **Spaced ID formats** — `AGNVL 0925 B`, `AP 51 NK 6401` — are missed.
+- **Spaced PAN** — `AGNVL 0925 B` — is missed; the unspaced form is not.
 - **English only.** Names and addresses in Devanagari or Kannada — present
   on real Aadhaar cards and utility bills — are never detected.
 - **Cropped values** are missed: a PAN visible only as `DE1234F` does not
@@ -561,13 +540,19 @@ spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
 
 Sibling project `ProjectTech4DevAI/kaapi-guardrails` runs a `pii_remover`
 validator on the same Presidio + `en_core_web_lg` stack, for text. Three
-findings from this harness apply to it:
+findings from this harness apply to a **stock** Presidio setup such as
+that one — each is fixed here, which is what makes them worth passing on:
 
-- `IN_AADHAAR` is checksum-gated, not a plain regex — its docs' own
-  example `2345 6789 0123` is **not** detected.
-- `IN_VEHICLE_REGISTRATION` needs the unspaced form; the documented
-  `MH 12 AB 1234` is not detected.
-- At the documented default `threshold: 0.5`, `IN_PASSPORT` can never fire.
+- **`IN_AADHAAR` is checksum-gated, not a plain regex.** Its docs' own
+  example `2345 6789 0123` fails Verhoeff and is dropped entirely, so one
+  OCR digit error hides a real Aadhaar. The OCR-tolerant fallback here
+  catches it.
+- **`IN_VEHICLE_REGISTRATION` needs the unspaced form**, so the documented
+  `MH 12 AB 1234` is missed. The CMVR Rule 50 pattern here accepts spaced,
+  hyphenated and BH-series forms.
+- **At the documented default `threshold: 0.5`, `IN_PASSPORT` can never
+  fire** — Presidio's context boost tops a weak pattern out at 0.45. The
+  default here is 0.4.
 
 ## Files
 
