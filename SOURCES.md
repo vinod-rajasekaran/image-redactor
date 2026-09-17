@@ -50,7 +50,7 @@ not.
 | `datasets/documents/` images **11–20** | **OpenAI assigns output rights to the user**, "to the extent permitted by applicable law" — see [Terms of Use](https://openai.com/policies/row-terms-of-use/) | **self** + **page** (terms) | Ten pages generated with an OpenAI image model, supplied as a collage and split. They *imitate* photographed documents — perspective, glare, low contrast — which makes them the hardest images in the corpus and the source of most known leaks. Every value on them is fabricated. |
 
 **Both halves are fully synthetic**: no real person, document, account or
-photograph. Together they are the 77-item ground truth behind the 97.2%
+photograph. Together they are the 77-item ground truth behind the 95.8%
 core headline — which `VALIDATION.md` states as a **ceiling on familiar
 material**, because this project drew the documents and then wrote the
 recognizers while looking at them.

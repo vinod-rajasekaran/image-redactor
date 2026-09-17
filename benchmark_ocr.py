@@ -6,7 +6,7 @@ wall-clock cost, so the accuracy/latency trade-off is visible in one table
 rather than inferred from entity counts.
 
 Usage:
-    python benchmark_ocr.py [--quick]
+    python benchmark_ocr.py [--quick] [--input datasets/documents/images]
 """
 from __future__ import annotations
 
@@ -33,19 +33,30 @@ CONFIGS = [
 ]
 
 
-def run(name: str, flags: list[str]) -> dict | None:
+def run(name: str, flags: list[str], input_dir: str) -> dict | None:
     run_dir = Path("runs") / f"bench_{name}"
     subprocess.run(["rm", "-rf", str(run_dir)], check=False)
 
     start = time.monotonic()
     proc = subprocess.run(
-        [sys.executable, "evaluate_redactor.py", "--run-name", f"bench_{name}", *flags],
+        [
+            sys.executable,
+            "evaluate_redactor.py",
+            "--input",
+            input_dir,
+            "--run-name",
+            f"bench_{name}",
+            *flags,
+        ],
         capture_output=True,
         text=True,
     )
     elapsed = time.monotonic() - start
     if proc.returncode not in (0, 2):
-        console.print(f"[red]{name} failed[/red]: {proc.stderr[-400:]}")
+        console.print(
+            f"[red]{name} failed[/red] (exit {proc.returncode}): "
+            f"{(proc.stderr or proc.stdout)[-400:]}"
+        )
         return None
 
     scored = subprocess.run(
@@ -66,13 +77,18 @@ def main() -> None:
     parser.add_argument(
         "--quick", action="store_true", help="Skip paddle (the slow one)"
     )
+    parser.add_argument(
+        "--input",
+        default="datasets/documents/images",
+        help="Corpus to run every configuration over",
+    )
     args = parser.parse_args()
 
     configs = [c for c in CONFIGS if not (args.quick and c[0] == "paddle")]
     results = []
     for name, flags in configs:
         console.print(f"[cyan]running[/cyan] {name} ...")
-        score = run(name, flags)
+        score = run(name, flags, args.input)
         if score:
             results.append((name, score))
 
@@ -80,17 +96,17 @@ def main() -> None:
     table.add_column("config", style="cyan")
     table.add_column("redacted", justify="right", style="green")
     table.add_column("leaked", justify="right", style="red")
-    table.add_column("not legible", justify="right", style="yellow")
-    table.add_column("recall %", justify="right", style="bold")
+    table.add_column("unverifiable", justify="right", style="yellow")
+    table.add_column("recall % (floor-ceiling)", justify="right", style="bold")
     table.add_column("wall s", justify="right")
-    for name, s in sorted(results, key=lambda kv: -kv[1]["recall_on_legible_pct"]):
+    for name, s in sorted(results, key=lambda kv: -kv[1]["recall_floor_pct"]):
         t = s["totals"]
         table.add_row(
             name,
             str(t["redacted"]),
             str(t["leaked"]),
-            str(t["not_legible"]),
-            f"{s['recall_on_legible_pct']:.1f}",
+            str(t["unverifiable"]),
+            f"{s['recall_floor_pct']:.1f}-{s['recall_ceiling_pct']:.1f}",
             f"{s['wall_seconds']:.0f}",
         )
     console.print(table)
@@ -100,7 +116,8 @@ def main() -> None:
         json.dumps(
             {
                 n: {
-                    "recall_on_legible_pct": s["recall_on_legible_pct"],
+                    "recall_floor_pct": s["recall_floor_pct"],
+                    "recall_ceiling_pct": s["recall_ceiling_pct"],
                     "totals": s["totals"],
                     "wall_seconds": s["wall_seconds"],
                     "config": s["config"],

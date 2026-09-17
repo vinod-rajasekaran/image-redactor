@@ -2517,3 +2517,127 @@ covers it; that remains the trade recorded in the `DATE_TIME` entry.
 morning after the defaults change and is superseded by **95.8% (69/72)**,
 90.9% overall (70/77). The 97.2% before that was measured with
 `DATE_TIME` on and `ORGANIZATION` off and is not comparable to either.
+
+---
+
+## 2026-09-17 — Every published number re-measured; nine were wrong, and one benchmark had been broken since the corpus move
+
+**Status:** Active — corrects figures in `README.md`, `VALIDATION.md` and
+`SOURCES.md`, and supersedes the clinical measurement in the
+`--protect-clinical` entry above
+
+Prompted by an audit that `check_docs.py` cannot do: it enforces tense and
+that every reference resolves, which is why it passed while nine published
+figures had drifted from what the code does. Every measurement the docs
+quote was re-run on `87c72d8`.
+
+**The pipeline had not moved.** The 20 `documents/` outputs are
+byte-identical to the run behind the published headline, so nothing below
+is a code regression; it is the record catching up with the code, plus one
+script that had stopped working.
+
+### What was wrong
+
+| claim | published | measured |
+|---|---|---|
+| KTP regions covered, anchoring off → on | 12/180 → 44/180 | **21/180 → 46/180** |
+| KTP per field, on | id 82%, name 63%, address 61%, religion 60% | **92% / 76% / 60% / 77%** |
+| `--medical-ner` on the sensitive tier | 2/5 → 5/5 | **1/5 → 4/5** (corpus 96.1%, 74/77) |
+| cheque region coverage | sign 58%, payee 46%, acno 20% | **75% / 71% / 39%** |
+| union vs one variant | 71/77 against 67 | 71/77 against **65** |
+| `--ocr paddle` on `documents/` | 7 leaks, 2 caught, 1 lost, 48× | **5 leaks, 1 caught, 2 lost, 68×** |
+| signature detector | 13/20 on cheques | **7 of 10** on the committed corpus |
+| maskara `ocr` domain | 93%, the highest of any domain | 93%, **second to `transport` at 97%** |
+| clinical withdrawals | 12 boxes on 3 images (entry above) | **5 boxes on 2 images**, +13 s |
+
+`VALIDATION.md` carried its own copies of several of these and is brought
+current with them, along with three figures it alone held: over-redaction
+on IndiaPII (19% of detections matching no labelled PII, 3,159 of 16,619 →
+**17%, 3,026 of 18,164**), timestamp-shaped decoys flagged as something
+(76% → **67%**), and the cheque legibility counts (payee 6/10 → **8/10**,
+signature 6/10 → **9/10**, account 4/10 → **7/10**, MICR 6/10 → **4/10**).
+Its `ktp/` paddle cross-check, 61/180, is the one figure left standing from
+an earlier commit; it is labelled as not re-run rather than restated.
+
+Confirmed unchanged: the headline (95.8% core, 90.9% overall), the cheque
+legibility percentages, IndiaPII-Bench at 76.6% with 4% of decoys flagged,
+the label lexicon at 100% recall / 97.2% precision, maskara at 82.7%, and
+every entry in the per-recognizer table.
+
+### The clinical figure, and why this project keeps making this mistake
+
+The entry above measured 12 boxes across 3 images at `ae5b729`. The
+reading-order fix in `87c72d8` changed it to **5 across 2**, because the
+regrouped rows leave fewer `PERSON`/`LOCATION` boxes sitting on clinical
+text in the first place. README and VALIDATION were updated in that commit;
+neither the commit message nor an entry here recorded the new measurement,
+so the decision log kept asserting 12 while the code produced 5. A number
+changed in the docs with no entry is a number with no evidence behind it —
+next time, the entry goes in the same commit as the figure.
+
+### `benchmark_ocr.py` has been broken since the corpora moved
+
+It invoked `evaluate_redactor.py` with no `--input`, so it fell back to the
+pre-migration default `input_images/`, which no longer exists. Every one of
+its seven configurations failed, and it reported this as an empty error
+string and an empty results table — the exact failure mode the
+"never abort the batch" convention exists to prevent, inverted: it aborted
+every config and still printed a table. It now takes `--input`, defaulting
+to `datasets/documents/images`, and prints the exit code with whichever of
+stderr or stdout is non-empty.
+
+**A second break sat behind the first.** With the configurations running
+again, the table assembly raised `KeyError: 'recall_on_legible_pct'` —
+`score_run.py` reports `recall_floor_pct` / `recall_ceiling_pct` over an
+`unverifiable` bucket now, and the benchmark still asked for the single
+collapsed recall over a `not_legible` one. So the script had two
+independent faults, and the first one hid the second: every configuration
+failed early enough that the table was never reached. It now prints the
+floor-ceiling range and the unverifiable count.
+
+The backend table in the README is restated from this run, and now carries
+what it was missing: these seven configurations are **OCR-scored**, because
+seven configurations would otherwise be seven vision passes. Nine of the 77
+items are unverifiable in every row, which is why each recall is a range.
+The four middle rows sit one item apart — inside the noise. Paddle buys
+about a point of floor for 50× the wall clock.
+
+### Paddle now fails outright on two documents
+
+`PaddleX 3.7` raises `TypeError: '>=' not supported between instances of
+'list' and 'float'` inside `paddlex/inference/pipelines/ocr/pipeline.py`.
+It is **deterministic on `11_aadhaar_card.png`** — both paddle runs today
+lost it — and **intermittent on `20_flight_booking.png`**, which failed in
+one run of the two. The per-image catch did its job: each batch finished
+and named what it dropped. But a dropped page gets no output at all, which
+is the worst way to lose one, and an intermittent version of that is worse
+still. The documents comparison is therefore scored on the 17 pages both
+backends produced. On those, Paddle covers one name Tesseract leaks and
+loses two items Tesseract covers, at 892 s extra. **On `documents/`,
+`--ocr paddle` is no longer a net gain.** On cheques it still is: account
+70% → 100%, payee 80% → 100%, MICR 40% → 80%, at 31×.
+
+### The scorer's noise floor, now characterised rather than bounded
+
+Earlier entries recorded 1 of 77 and then 0 of 77 verdicts flipping on a
+re-score, and left a single-item difference "unresolved until it
+reproduces". It has now reproduced, repeatedly, and it is not random:
+
+- `15_job_application_form.png`'s address has been scored `leaked`,
+  `redacted`, `leaked` across three scorings of the **same** image.
+- On the Paddle output, `01_aadhaar_card.png`'s name has been scored each
+  way twice across four scorings.
+
+Both are values a box covers *partly*, where legibility is a genuine
+judgement rather than a model error. The band is **0–1 of 77**, it lands
+on partial coverage, and the headline is published as the floor: 69/72,
+not the 70/72 that the same images also score. A single-item difference
+between two runs remains noise until it reproduces.
+
+**Method note:** `vision_score.py` overwrites `vision_verdicts.json` with
+whatever it scored this pass, so an API error mid-run silently produces a
+*shorter* verdict file rather than a partial one. Two runs here came back
+with images missing and had to be re-scored. Worth a merge-on-write, or at
+least a warning when the file shrinks.
+
+**Headline unchanged:** 95.8% core (69/72), 90.9% overall (70/77).

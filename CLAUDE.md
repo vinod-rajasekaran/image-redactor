@@ -66,9 +66,12 @@ documents. OCR, detection and redaction run on-device. The only network
 call is to Claude, and only for *scoring* — never for redaction.
 
 Current result: **95.8% of core PII redacted** (69/72 across 20
-documents), 90.9% overall (70/77), vision-scored. The five
-`sensitive`-tier items — diagnoses and medications — go 2/5 to 5/5 with
-`--medical-ner`, which is off by default because it pulls in torch.
+documents), 90.9% overall (70/77), vision-scored. That is the **floor** of
+a 69-70 band: the images are byte-identical run to run, but the vision
+scorer disagrees with itself on 0-1 of 77 items, always on a partially
+covered value. Publish the floor. The five `sensitive`-tier items —
+diagnoses and medications — go 1/5 to 4/5 with `--medical-ner`, which is
+off by default because it pulls in torch.
 
 ## Layout
 
@@ -191,6 +194,17 @@ inert at 2x can break at 3x.
 **Entity counts are a bad metric.** Both misses and false positives move
 them. Two Paddle bugs looked like improvements by that measure. Score
 leakage instead.
+
+**A number changed in the docs without a `DECISIONS.md` entry is a number
+with no evidence.** The clinical withdrawal count went 12 to 5 in README
+and VALIDATION in the commit that fixed reading order, with no entry and no
+mention in the commit message, so the decision log asserted 12 while the
+code produced 5 for a day. The entry goes in the same commit as the figure.
+
+**`vision_score.py` overwrites `vision_verdicts.json` with whatever it
+scored this pass.** An API error mid-run yields a *shorter* file, not a
+partial one, and `score_run.py` then quietly falls back to OCR verdicts for
+the missing images. Check the item count before trusting a score.
 
 **`--protect-clinical` removes boxes, which nothing else here does.** Two
 invariants hold it safe and both are easy to break by accident:

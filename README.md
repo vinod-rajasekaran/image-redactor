@@ -72,15 +72,23 @@ handwriting and Devanagari remain substantially unsolved, and
 vision-scored by showing every redacted output to Claude and asking what
 remains readable. Overall, including the sensitive tier: 90.9% (70/77).
 
-The three core leaks are a date of birth on one photographed card, and a
-name and an address on one photographed form. The date of birth is the
-one case `--dates` recovers that label anchoring cannot: Tesseract reads
-the label `DOB:` as `pos:` on that card, so there is no label left to
-anchor to.
+**That is the floor of a two-item band, and the band belongs to the scorer,
+not the pipeline.** The redacted images are byte-identical from run to run,
+but scoring the same image three times has returned `leaked`, `redacted`
+and `leaked` for one partially covered address on
+`15_job_application_form.png`. Counted leaked it is 69/72; counted
+redacted, 70/72. The floor is what this project publishes — see
+[measuring leakage](#measuring-leakage-not-detections).
+
+The two stable core leaks are a date of birth on one photographed card and
+a name on one photographed form. The date of birth is the one case
+`--dates` recovers that label anchoring cannot: Tesseract reads the label
+`DOB:` as `pos:` on that card, so there is no label left to anchor to.
 
 The corpus also carries 5 `sensitive`-tier items — diagnoses and
-medications. Those need `--medical-ner`, which is **off by default**
-because it pulls in torch; with it they go from 2/5 to 5/5.
+medications — of which **one** is covered by default. They need
+`--medical-ner`, which is **off by default** because it pulls in torch;
+with it they go to 4 of 5, and the corpus as a whole to 96.1% (74/77).
 
 Two of those 72 core items are dates of birth, reached by their label
 rather than by `DATE_TIME`, which is
@@ -294,10 +302,11 @@ clinical span scored 0.48 or better and the real vocabulary — `Metformin`,
 0.5 removes the false-positive withdrawals and keeps every true one.
 
 **Measured cost:** on the 20-document corpus, 5 boxes withdrawn across 2
-images, `+9s` over the whole run, and the only item that changes verdict
-is `Vitamin D3 60K` — which the corpus annotates as PII and this flag
-exists to leave readable. No identifier changes verdict. Needs
-`transformers`, like `--medical-ner`.
+images — 4 on the prescription, 1 on the lab report — `+13s` on a 13s run,
+and 18 of the 20 output images byte-identical to a default run. The only
+item that changes verdict is `Vitamin D3 60K`, which the corpus annotates
+as PII and this flag exists to leave readable. No identifier changes
+verdict. Needs `transformers`, like `--medical-ner`.
 
 ## What it detects
 
@@ -375,41 +384,53 @@ boxes come from the same OCR pass, read for position rather than pattern.
 ### The OCR backend is the largest single lever
 
 **Tesseract is the default and PaddleOCR is off**, because Tesseract is
-25–48× faster and loses nothing on clean printed pages. That trade
-reverses on anything photographed or patterned:
+31–68× faster and loses nothing on clean printed pages. That trade
+reverses on the cheques. On the documents it does not:
 
 | corpus | tesseract | `--ocr paddle` | cost |
 |---|---|---|---:|
-| `documents/` — 20 Indian pages | 7 leaks | **2 of them caught**, 1 other lost | 48× |
-| `cheques/` — account number | 40% covered | **100%** | 25× |
-| `cheques/` — payee name | 60% | **90%** | |
-| `cheques/` — MICR line | 60% | **100%** | |
+| `documents/` — the 17 pages both backends scored | 5 leaks | **1 of them caught**, 2 others lost | 68× |
+| `cheques/` — account number | 70% covered | **100%** | 31× |
+| `cheques/` — payee name | 80% | **100%** | |
+| `cheques/` — MICR line | 40% | **80%** | |
+
+**Paddle fails outright on some of the documents.** PaddleX 3.7 raises
+`TypeError: '>=' not supported between instances of 'list' and 'float'`
+inside its own OCR pipeline — every time on `11_aadhaar_card.png`, and in
+one run of two on `20_flight_booking.png`. Each failure is caught per image
+and skipped, so the batch completes and names what it dropped — but a
+dropped page gets no redacted output at all, which is the worst way to lose
+one. The documents row above is scored on the 17 pages that came through
+both backends, so it compares like with like.
 
 Tesseract cannot read `A/c No.` on a Canara or ICICI security background
 under **any** preprocessing — not RGB, greyscale or CLAHE+Otsu, nor the
 R/G/B, HSV-value and desaturated-ink variants tried since. Paddle reads it
-directly. With no label there is nothing to anchor, which is why six of
-ten account numbers were readable and are now covered.
+directly. With no label there is nothing to anchor, which is why three of
+ten account numbers are still readable under Tesseract and none are under
+Paddle.
 
-**When to turn it on:** photographed pages, coloured or patterned
-security backgrounds, cheques. A cheap proxy is Tesseract's own mean word
-confidence — 91–95 on flat synthetic pages, **49.8–76.7** on photoreal
-Indian documents, 44–72 on cheques. Below roughly 85, Paddle is likely to
-pay for itself.
+**When to turn it on:** cheques, and coloured or patterned security
+backgrounds. A cheap proxy is Tesseract's own mean word confidence —
+91.0–95.0 on the flat synthetic pages, 53.6–79.1 on the photoreal ones
+(`14_passport.png` is the exception at 95, reading like a flat page), and
+**54.7–75.5 on cheques**, the lowest of any corpus here.
 
-**Two cautions.** Paddle is not strictly better: on the flight booking it
-*loses* a PNR that Tesseract covers, so switching backends trades leaks
-rather than only removing them — running both and unioning is the only way
-to keep everything. And Paddle has two landmines documented in
-`CLAUDE.md`, both of which raise detection counts while lowering actual
+**Two cautions.** Paddle is not strictly better, and on `documents/` it is
+a net loss: it covers one name Tesseract leaks, and loses a water-bill
+account number and a drug name that Tesseract covers. Switching backends
+trades leaks rather than only removing them — running both and unioning is
+the only way to keep everything. And Paddle has two landmines documented
+in `CLAUDE.md`, both of which raise detection counts while lowering actual
 redaction.
 
 Paddle's own speed guides do not help here: `enable_mkldnn` is Intel x86
 and this project runs on arm64, and neither it nor `cpu_threads` exists in
 PaddleOCR 3.7's constructor. The cost is the three-variant union —
-`--single-variant` takes Paddle from 131.6 to 75.5 s/image on cheques, but
-drops MICR coverage from 100% to 60%, and the MICR line encodes account
-digits.
+`--single-variant` takes Paddle from 87 to 46 s/image on cheques, and every
+field pays for it: the account number drops from 100% covered to 90%, the
+payee name from 100% to 80%, and the MICR line from 80% to 50%. The MICR
+line encodes account digits.
 
 ## Output
 
@@ -449,6 +470,17 @@ redaction fails it reads almost nothing — it has reported plainly visible
 PII as both "unverifiable" and "redacted". Claude sees them, and found
 leaks that a careful manual pass had missed.
 
+**It buys that at the cost of a stable number.** The pipeline is
+deterministic — the same input gives byte-identical output images — but
+the scorer is not, and repeat scorings of one identical image set disagree
+on **0 to 1 of 77** items. The disagreement is not random across the
+corpus: it lands on values a box covers *partly*, where "legible" is
+genuinely a judgement. Two items have moved so far — an address on
+`15_job_application_form.png`, and, on the Paddle output, a name on
+`01_aadhaar_card.png`. Both have been scored each way more than once.
+Read any single-item difference between two runs as noise until it
+reproduces, and read the headline as a floor.
+
 | scorer | recall | leaks found |
 |---|---|---:|
 | OCR | 88.3% – 100.0% | 0 |
@@ -487,12 +519,12 @@ Every default rests on measured evidence, and several are deliberately
 |---|---|---|
 | `--threshold 0.4` | Presidio's +0.35 context boost over a 0.1 base pattern lands at exactly **0.45**, so the conventional 0.5 drops every context-boosted weak match | A real PAN card's number is redacted rather than left visible. At 0.5, `IN_PASSPORT` can never fire |
 | `--ocr tesseract` | PaddleOCR reads better | ~17x faster — and with the union and block merging, Tesseract now scores higher anyway |
-| 3-variant union | One preprocessing path is simpler | No variant wins everywhere: CLAHE+Otsu rescues a laptop-screen photo but destroys the coloured PAN card. Union recovered 71/77 against 67 for the best single variant |
+| 3-variant union | One preprocessing path is simpler | No variant wins everywhere: CLAHE+Otsu rescues a laptop-screen photo but destroys the coloured PAN card. Union recovers 71/77 against 65 for a single variant |
 | `--psm 4` | Tesseract's own default is 3 | +2 points of recall for free, and it emits each label beside its value |
 | block merging | Redacting each detected box is simpler | A wrapped address is detected line by line and often only partly; the enclosing rectangle covers what was never detected at all |
 | visual PII **on** | Presidio only redacts OCR'd text | An intact Aadhaar QR still encodes name, DOB and address |
 | YuNet over Haar | Haar needs no model file | Haar reported 3 faces where 2 exist |
-| signatures anchored on a label | Pure shape analysis needs no OCR | Ranking components by sprawl put the true signature at rank 3-8, so the top few would black out unrelated ink. Anchoring on a cue word gives 13/20 with zero false positives |
+| signatures anchored on a label | Pure shape analysis needs no OCR | Ranking components by sprawl put the true signature at rank 3-8, so the top few would black out unrelated ink. Anchoring on a cue word finds the signature on 7 of the 10 cheques with zero false positives |
 | `detect()`, never `detectAndDecode()` | The decode APIs look more capable | Decode-gated APIs return **no box** for a code they cannot read — exactly the codes that most need covering |
 | `--style solid` | Blur looks less brutal | Only solid destroys the information; blur and pixelation are partially reversible |
 | Aadhaar fallback **on** | Presidio validates a Verhoeff checksum | Checksum failures are *discarded*, so one OCR digit error leaves a real Aadhaar fully visible |
@@ -522,19 +554,33 @@ here is, or should be presented as, an issued record.
 
 ## Benchmarks
 
-**OCR backends**, scored by leakage over the same 20 images:
+**OCR backends**, every configuration over the same 20 images:
 
-| config | redacted | still visible | recall | wall s |
-|---|---:|---:|---:|---:|
-| paddle | 72 | 24 | 75.0% | 434 |
-| tesseract `--psm 4` | 65 | 31 | 67.7% | 26 |
-| rapidocr | 64 | 32 | 66.7% | 40 |
-| tesseract `--psm 3` | 63 | 33 | 65.6% | 31 |
+```bash
+python benchmark_ocr.py            # --quick skips paddle, the slow one
+```
 
-Measured before the union and block merging, which lifted Tesseract past
-Paddle. RapidOCR is dominated on both axes — it ships PP-OCRv4 *mobile*
-models while PaddleOCR 3.7 runs PP-OCRv6_medium, so the assumption that
-they share a model lineage was wrong.
+| config | redacted | leaked | unverifiable | recall % | wall s |
+|---|---:|---:|---:|---:|---:|
+| paddle | 62 | 3 | 9 | 83.8 – 95.9 | 849 |
+| tesseract `--psm 11` | 64 | 4 | 9 | 83.1 – 94.8 | 23 |
+| rapidocr | 63 | 5 | 9 | 81.8 – 93.5 | 52 |
+| tesseract `--psm 3` | 63 | 5 | 9 | 81.8 – 93.5 | 23 |
+| tesseract `--psm 4` — the default | 63 | 5 | 9 | 81.8 – 93.5 | 17 |
+| tesseract `--psm 6` | 63 | 5 | 9 | 81.8 – 93.5 | 13 |
+| tesseract `--psm 12` | 60 | 8 | 9 | 77.9 – 89.6 | 27 |
+
+**This table is OCR-scored, and that is why every row is a range.** Seven
+configurations would be seven vision passes, so the harness uses the cheap
+scorer, which cannot read 9 of the 77 items either way in any row. Take the
+ranking and the cost column from here and the headline from
+[the vision score](#current-result). The four middle rows are one item
+apart, which is inside the noise — the page-segmentation mode is not the
+lever it looks like, and the Tesseract wall times move by a few seconds
+between runs, so read those as a scale, not a ranking. Paddle buys about a point of floor for 50× the wall
+clock and lost one image to the PaddleX crash above. RapidOCR is dominated
+on both axes — it ships PP-OCRv4 *mobile* models while PaddleOCR 3.7 runs
+PP-OCRv6_medium, so they do not share a lineage.
 
 **Label lexicon** — `redactor/labels.py` redacts the value *beside* a
 personal-data label rather than matching the value's shape, because every
@@ -577,11 +623,12 @@ python ktp_benchmark.py --score runs/ktp
 
 | field | anchoring off | on |
 |---|---:|---:|
-| id_number | 32% | **82%** |
-| name | 21% | **63%** |
-| address | 16% | **61%** |
-| religion | 13% | **60%** |
-| regions fully covered | 12/180 | **44/180** |
+| id_number | 38% | **92%** |
+| name | 36% | **76%** |
+| address | 21% | **60%** |
+| religion | 13% | **77%** |
+| blood_type | 75% | **92%** |
+| regions fully covered | 21/180 | **46/180** |
 
 `religion` and `blood_type` have no recognizer at all — no pattern matches
 `BUDHA` or `O` — so nothing but label-anchoring can cover them. Run
@@ -606,9 +653,9 @@ want a larger slice.
 
 | field | mean covered |
 |---|---:|
-| signature | 58% |
-| payee name | 46% |
-| account number | 20% |
+| signature | 75% |
+| payee name | 71% |
+| account number | 39% |
 
 Because these boxes are trustworthy, this is the one place *coverage* is a
 meaningful metric — the same measurement computed from vision-generated
@@ -644,9 +691,9 @@ corrupted text**:
 python benchmark_maskara.py
 ```
 
-82.7% overall — and the `ocr` domain scores **93%, the highest of any
-domain**, which is the direct evidence for the OCR-tolerant Aadhaar
-fallback. Its driving-licence and vehicle-registration formats differ from
+82.7% overall — and the `ocr` domain scores **93%**, above the corpus
+average and second only to `transport` at 97%, which is the direct
+evidence for the OCR-tolerant Aadhaar fallback. Its driving-licence and vehicle-registration formats differ from
 IndiaPII-Bench's, which is why both recognizers accept the union of what
 the two corpora contain. It still exposes a spacing gap: PAN at 70% on
 spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
@@ -659,8 +706,9 @@ spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
 - **Handwriting** goes unread by both engines. On cheques this is the
   *dominant* failure, not an edge case — the payee name is handwritten on
   every one.
-- **Signatures** are found only when a printed cue word sits nearby;
-  13/20 on cheques.
+- **Signatures** are found only when a printed cue word sits nearby; the
+  detector fires on 7 of the 10 cheques, though other boxes leave the
+  signature unreadable on 9.
 - **Spaced PAN** — `AGNVL 0925 B` — is missed; the unspaced form is not.
 - **English only.** Names and addresses in Devanagari or Kannada — present
   on real Aadhaar cards and utility bills — are never detected.

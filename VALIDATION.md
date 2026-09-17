@@ -18,8 +18,9 @@ locally and never redistributed, which puts several candidates in scope —
 see [the gaps](#1-there-is-no-independent-indian-form-corpus-that-is-safe-to-use).
 
 **The largest unexploited improvement is a flag, not a fix**: `--ocr paddle`
-is off by default and would cover six of ten cheque account numbers that
-currently leak, at 25–48× the runtime. See
+is off by default and would cover the three of ten cheque account numbers
+that currently leak, at 31–68× the runtime — and, on `documents/`, would
+cost more than it recovers. See
 [gap 5](#5-the-ocr-backend-is-the-largest-unexploited-lever-and-it-is-off).
 
 ---
@@ -66,17 +67,17 @@ session could reach for it.
 | recognizers on text | IndiaPII-Bench, 2,000 docs, 12,065 PII spans | third party | CC-BY-4.0 | **76.6% recall** |
 | recognizers on text | maskara, 2,600 docs, 7,600 spans | third party | MIT | **82.7% recall** |
 | label lexicon | IndiaPII-Bench, 9,782 labelled values | third party | CC-BY-4.0 | **100% recall, 97.2% precision** |
-| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | tesseract: IFSC 100%, signature 90%, payee 80%, account 70% · **paddle: account 100%, payee 90%** |
-| label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **46/180 fully covered, vs 12/180 with the mechanism off** |
+| legibility on images | 10 cheques, 6 elements each, vision-scored | third party | Apache-2.0 | tesseract: IFSC 100%, signature 90%, payee 80%, account 70% · **paddle: account 100%, payee 100%, MICR 80%** |
+| label-anchored geometry | 20 Indonesian ID cards, 180 regions, publisher boxes | third party | CC-BY-4.0 | **46/180 fully covered, vs 21/180 with the mechanism off** |
 
 ### Project-produced evidence, and therefore weaker
 
 | what | data | result |
 |---|---|---|
-| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **95.8% core** (69/72), 90.9% overall; the sensitive tier goes 2/5 -> 5/5 with `--medical-ner` |
-| clinical protection | `documents/`, defaults vs `--protect-clinical`, vision-scored | 5 boxes withdrawn; the only verdict that changed is a drug name the flag exists to preserve, and no identifier moved |
-| label geometry | hand-built OCR dicts, `test_labels.py` | 17 checks pass |
-| clinical suppression rule | hand-built boxes, `test_clinical.py` | 13 checks pass |
+| end-to-end legibility | `documents/`, 20 images, 77 items, vision-scored | **95.8% core** (69/72 — the floor of a 69-70 band the scorer moves), 90.9% overall; the sensitive tier goes 1/5 -> 4/5 with `--medical-ner`, and the corpus to 96.1% |
+| clinical protection | `documents/`, defaults vs `--protect-clinical`, vision-scored | 5 boxes withdrawn on 2 images, +13 s; 18 of 20 outputs byte-identical; the only verdict that changed is a drug name the flag exists to preserve, and no identifier moved |
+| label geometry | hand-built OCR dicts, `test_labels.py` | 20 checks pass |
+| clinical suppression rule | hand-built boxes, `test_clinical.py` | 14 checks pass |
 | metadata hygiene | synthetic EXIF/GPS fixtures, `test_metadata_stripping.py` | 3 checks pass |
 
 `documents/` is kept because it is the original corpus, its 77 items were
@@ -237,8 +238,8 @@ cheapest available improvement to the evidence base.
 - the **geometry** — does it pair that label with the right value on a
   page? **Now measured**: on 20 synthetic Indonesian ID cards with
   publisher-authored boxes, turning it on lifts regions fully covered from
-  **12/180 to 44/180**, with per-field gains of +29 to +50 points. The
-  sharpest evidence is `religion` (13%→60%) and `blood_type` (62%→91%),
+  **21/180 to 46/180**, with per-field gains of +17 to +64 points. The
+  sharpest evidence is `religion` (13%→77%) and `blood_type` (75%→92%),
   which no recognizer covers at all — nothing but label-anchoring can
   redact those. On Indian cheques it is what covers the account number
   once the label is legible at all.
@@ -257,30 +258,40 @@ Label-anchoring covers that case **on a page**, which a text benchmark
 cannot exercise: it is `A/c No.` beside the number that triggers it, and
 IndiaPII-Bench has no geometry. So the text figure understates the image
 pipeline for this entity, and the image evidence is the cheque result
-(account number 40% → 100% once the label is legible).
+(account number 70% → 100% once the label is legible).
 
 ### 5. The OCR backend is the largest unexploited lever, and it is off
 
-`--ocr paddle` is **not the default**, because Tesseract is 25–48× faster
-and loses nothing on clean printed pages. On photographed or patterned
-sources the trade reverses:
+`--ocr paddle` is **not the default**, because Tesseract is 31–68× faster
+and loses nothing on clean printed pages. On the cheques the trade
+reverses. On the documents it does not:
 
 | corpus | tesseract | paddle |
 |---|---|---|
-| `documents/` (Indian, 20) | 7 leaks | **2 caught, 1 lost** |
-| `cheques/` account number | 40% | **100%** |
-| `cheques/` payee name | 60% | **90%** |
-| `ktp/` (cross-check) | 45/180 | 61/180 |
+| `documents/` (Indian, 17 pages both backends produced) | 5 leaks | **1 caught, 2 lost** |
+| `cheques/` account number | 70% | **100%** |
+| `cheques/` payee name | 80% | **100%** |
+| `cheques/` MICR line | 40% | **80%** |
+| `ktp/` (cross-check) | 46/180 | 61/180 — **measured at an earlier commit and not re-run** |
 
-**Paddle is not strictly better** — it loses a PNR on the flight booking
-that Tesseract covers. Switching trades leaks; only running both and
-unioning keeps everything, and no such mode is built.
+**Paddle is not strictly better, and on `documents/` it is now a net
+loss**: one name recovered against a water-bill account number and a drug
+name given up. Switching trades leaks; only running both and unioning keeps
+everything, and no such mode is built.
+
+**It also drops pages.** PaddleX 3.7 raises `TypeError: '>=' not supported
+between instances of 'list' and 'float'` inside its own OCR pipeline —
+every time on `11_aadhaar_card.png`, and in one run of two on
+`20_flight_booking.png`. The per-image catch reports and skips, so a dropped
+page leaves no output at all. An intermittent failure of that shape is the
+strongest argument against making this the default on document corpora.
 
 A cheap proxy for when it pays: Tesseract's own mean word confidence,
-91–95 on flat synthetic pages against 49.8–76.7 on photoreal Indian
-documents and 44–72 on cheques. **It is not a failure detector** — Canara
-cheques leak at confidence 64–65 while Axis succeeds at 55–59, because
-Tesseract reads guilloche as text and is confidently wrong.
+91.0–95.0 on the flat synthetic pages against 53.6–79.1 on the photoreal
+ones and **54.7–75.5 on cheques**. **It is not a failure detector** —
+Canara cheques leak at confidence 64–65 while Axis succeeds at 55–59,
+because Tesseract reads guilloche as text and is confidently wrong, and
+`14_passport.png` reads at 95 while being a photograph.
 
 ### 6. The vision-model path is unevaluated, and cannot be evaluated here
 
@@ -299,11 +310,11 @@ idea, and the single box it produced was accurate and tightly placed.
 Re-test on a machine that can hold a 7B model before drawing any
 conclusion about whether this replaces or supplements the OCR path.
 
-### 7. Clinical protection is measured on three images, all produced here
+### 7. Clinical protection is measured on two images, both produced here
 
 `--protect-clinical` is off by default and validated only on `documents/`:
-12 boxes withdrawn across 3 of 20 images, of which one prescription
-carries 10. That is enough to show the mechanism works and enough to show
+5 boxes withdrawn across 2 of 20 images, of which one prescription
+carries 4. That is enough to show the mechanism works and enough to show
 it withdraws nothing it should not — **no identifier changed verdict, on
 any image** — but it is not enough to characterise the clinical model's
 false-positive rate.
@@ -328,8 +339,8 @@ under a licence and an ethics this project will accept.
 - **Handwriting.** The one place it was measured — cheques — was
   catastrophic.
 - **Real OCR noise on labels.** maskara's `ocr` domain is synthetic corruption.
-- **Over-redaction cost.** 19% of detections on IndiaPII (3,159 of 16,619)
-  match no labelled PII, and 76% of timestamp-shaped decoys are flagged as
+- **Over-redaction cost.** 17% of detections on IndiaPII (3,026 of 18,164)
+  match no labelled PII, and 67% of timestamp-shaped decoys are flagged as
   something. This project prefers over-redaction to a miss, but the cost
   is unquantified in terms of document usability.
 
@@ -437,10 +448,11 @@ needs no ground-truth text:
 | element | covered |
 |---|---:|
 | branch IFSC | **10/10** |
-| payee name | 6/10 |
-| signature | 6/10 |
-| MICR line | 6/10 |
-| account number | 4/10 |
+| signature | **9/10** |
+| payee name | 8/10 |
+| account number | 7/10 |
+| amount | 6/10 |
+| MICR line | 4/10 |
 
 Cheques remain by far the weakest case, and handwriting remains the
 reason. But "nothing is covered" was wrong, and the error was in the
