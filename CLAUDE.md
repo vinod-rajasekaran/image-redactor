@@ -124,6 +124,33 @@ corpus (180 regions against 77 items) and will look tempting. Use it to
 confirm a change does not regress, never to decide what the change should
 be.
 
+**`datasets/holdout/` may never be used to tune any OCR system.** Not
+backend selection, not PSM, not upscale factors, not preprocessing variants,
+not thresholds. This is the repository owner's condition on the corpus being
+here, it is absolute, and it does not lapse. The line is **scoring versus
+choosing**: one run with an already-chosen configuration is the corpus's
+whole purpose and works normally; a sweep that picks a parameter from these
+images is refused by `redactor.datasets.refuse_if_tuning()`, which
+`benchmark_ocr.py` calls before its first configuration.
+
+Do not route around the guard — not by copying the images elsewhere, not by
+clearing `held_out` in `_meta`, not by pointing a sweep at a subdirectory.
+The reason it is code and not a comment is that this failure leaves no
+trace: sweep configurations over a held-out corpus and the resulting number
+looks exactly like the measurement it was before — same images, same
+annotations, same scorer — so no diff and no score shows that a test set
+became a training set. It is not hypothetical. While `test_holdout_guard.py`
+was being verified against a deliberately disabled flag, `benchmark_ocr.py`
+started redacting the corpus under six Tesseract configurations and had to
+be killed; that is how it would happen in practice, as a default `--input`
+nobody changed. Add the guard call to any *new* script that chooses a
+parameter from a score.
+
+Holding it out does **not** make it independent evidence — the owner
+generated it, so it shares `documents/`'s ceiling status. What it gives is a
+number nothing was fitted to. Evidence for a change still comes from
+`cheques/`, IndiaPII-Bench or maskara.
+
 **Do not develop or test against a corpus this project generated.** Two —
 `pack/` and `generated/` — were deleted in September 2026 for exactly that
 reason: the recognizers and the test data had the same author, so they

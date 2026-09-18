@@ -1,0 +1,598 @@
+{
+  "_meta": {
+    "description": "11 synthetic Indian documents held out as a test set: an Aadhaar card, a community-services ID card, and nine everyday forms, bills, invoices and labels. 71 PII items, 9 of them sensitive-tier.",
+    "source": "OpenAI image generation, prompted by the repository owner, 2026-09-18",
+    "licence": "Fully synthetic — every name, number, address and face is fabricated; no real person and no real document. OpenAI assigns output rights to the user; purely AI-generated output generally cannot be copyrighted for want of human authorship, so nothing restricts redistribution. The repository's MIT licence covers the human-directed selection, curation and annotation. Same status as datasets/documents/, which is likewise entirely AI-generated (01-10 by a Claude-written renderer, 11-20 by an OpenAI image model). See SOURCES.md.",
+    "annotation": "text (legibility scoring); no boxes — see note_no_boxes",
+    "held_out": true,
+    "tuning": "forbidden",
+    "held_out_rule": "THIS CORPUS MAY NEVER BE USED TO TUNE ANY OCR SYSTEM. Not backend selection, not PSM, not upscale factors, not preprocessing variants, not thresholds. Scoring it once with an already-chosen configuration is its purpose and is allowed; sweeping configurations over it and keeping the winner is forbidden. Set by the repository owner, 2026-09-18, as an absolute and permanent condition of the corpus being here. redactor.datasets.refuse_if_tuning() enforces it and test_holdout_guard.py pins it.",
+    "evidence_status": "NOT independent evidence. The repository owner generated these images, so they carry the same standing as datasets/documents/: a ceiling on familiar material. Held-out discipline stops the corpus being tuned against, which is worth real money; it does not make it third-party data. Independent evidence still comes from datasets/cheques/, IndiaPII-Bench and maskara.",
+    "note_no_boxes": "No box coordinates. The only way to produce them for these images is a vision pass, and per-region coverage from vision boxes was built, measured and removed here because those boxes sit about a text row off. Text-only, like datasets/documents/.",
+    "note_resolution": "Images 03-11 are roughly 471x363, so character heights are small and the upscale-by-character-height path carries most of the load. A low score on those pages may be measuring resolution rather than detection. Images 01 and 02 are full resolution (1536x1024 and 1427x1102).",
+    "note_watermarks": "Every page except 01 carries a printed 'SYNTHETIC TEST DOCUMENT' watermark, which is real ink on the page and will be OCR'd as text.",
+    "note_filenames": "Filenames carry an 'h' prefix so they cannot collide with another corpus's. They did: holdout's 01_aadhaar_card.png matched documents' exactly, and a score run without REDACTOR_CORPUS=holdout silently graded that one page against the wrong ground truth and reported '4 redacted, 1 leaked' as if it were a whole-corpus result. A prefix turns that silent half-success into an obvious zero-match."
+  },
+  "h01_aadhaar_card.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "ChatGPT Image Sep 18, 2026 at 10_55_58 AM.png",
+    "pii": [
+      {
+        "field": "Name (Devanagari)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "नेहा शर्मा",
+        "note": "The only Devanagari value in any image corpus here. The label lexicon carries Devanagari terms that no image has exercised."
+      },
+      {
+        "field": "Name (Latin)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Neha Sharma"
+      },
+      {
+        "field": "DOB",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "03/11/1998"
+      },
+      {
+        "field": "Aadhaar No.",
+        "expected_type": "IN_AADHAAR",
+        "tier": "core",
+        "text": "4123 5687 9012",
+        "note": "Verhoeff checksum FAILS (verified). IN_AADHAAR discards checksum failures rather than down-scoring them, so only the OCR-tolerant fallback can cover this. Second canary for that fallback, alongside documents/04_hospital_admission_report.png."
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Photorealistic Aadhaar card on a wooden surface. Gender (महिला / Female) is not annotated, matching documents/. NOTE: this is the one image here that carries NO 'synthetic test document' watermark, so SOURCES.md's caveat about reproducing official Indian layouts applies most strongly to it. Every value on it is fabricated."
+  },
+  "h02_community_services_id_card.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "ChatGPT Image Sep 18, 2026 at 11_15_40 AM.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Arjun Mehta"
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "14-08-1992"
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "+91 98765 43210"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "arjun.mehta@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "12, Green Park Avenue, Indiranagar, Bengaluru - 560038, Karnataka, India"
+      },
+      {
+        "field": "Document ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "SCSP2024-001234",
+        "note": "Appears twice: in the box top-right and again as the barcode's printed value. Both must be covered. No published spec, so no recognizer — a labels.py case."
+      },
+      {
+        "field": "Emergency Contact Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Priya Mehta"
+      },
+      {
+        "field": "Emergency Contact Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "+91 91234 56789"
+      },
+      {
+        "field": "Blood Group",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "B+"
+      },
+      {
+        "field": "Known Allergies",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Penicillin"
+      },
+      {
+        "field": "Signature (handwritten)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Arjun Mehta"
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 1,
+      "barcode": 1
+    },
+    "notes": "The richest page in the corpus: face, barcode, QR, contact details and two sensitive-tier medical fields on one sheet. 'Medical Conditions: None' is deliberately NOT annotated — the value is the word 'None', so there is nothing to conceal and a legibility verdict on it would be meaningless. Registration Date and Valid Till are document dates, not personal ones, and are not annotated either."
+  },
+  "h03_bank_account_statement.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_02.png",
+    "pii": [
+      {
+        "field": "Account Holder",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Priya Sharma"
+      },
+      {
+        "field": "Account Number",
+        "expected_type": null,
+        "tier": "core",
+        "text": "S020 4433 7788",
+        "note": "The leading glyph is the LETTER S, not a 5 — verified at 8x. A quirk of the generator's font, recorded verbatim because ground truth records what is on the page. The bank-account recognizer was removed in September 2026, so no type covers this."
+      },
+      {
+        "field": "IFSC",
+        "expected_type": null,
+        "tier": "core",
+        "text": "NR8K0001234",
+        "note": "Malformed: RBI requires four ALPHABETIC characters at positions 1-4 and this has an '8' at position 3 (verified at 8x). IN_IFSC therefore cannot fire, by specification. A miss here is the image's fault, not the recognizer's — do not 'fix' IN_IFSC to catch it."
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "123 Maple Street, Indiranagar, Bengaluru - 560038"
+      },
+      {
+        "field": "Transaction narration",
+        "expected_type": null,
+        "tier": "core",
+        "text": "UPI/9876543210",
+        "note": "A bare 10-digit number in a transaction line, shaped exactly like an Indian mobile number. Genuinely ambiguous: it is a UPI reference, but covering it is the over-redaction this project prefers. Worth a human decision."
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "NorthRiver Bank account statement, photographed look, 471x363."
+  },
+  "h04_patient_intake_form.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_03.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Rahul Nair"
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "22 / 11 / 1985"
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 43210"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "rahul.nair@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "45 Lake View Road, Whitefield, Bengaluru - 560066"
+      },
+      {
+        "field": "Medical History",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Diabetes"
+      },
+      {
+        "field": "Medical History",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Hypertension"
+      },
+      {
+        "field": "Medical History (Other)",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Seasonal cold"
+      },
+      {
+        "field": "Current Medications",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Metformin 500mg (BD)"
+      },
+      {
+        "field": "Emergency Contact Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Anjali Nair"
+      },
+      {
+        "field": "Emergency Contact Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "91234 56789"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "WellCare Clinic intake form, values HANDWRITTEN in blue ink on a printed form — the hardest OCR case in the corpus. Diabetes and Hypertension are ticked checkboxes with printed labels, so the 'value' is the tick, not the word; a legibility verdict on the printed label is therefore weak evidence. Metformin is the --medical-ner and --protect-clinical case."
+  },
+  "h05_electricity_bill.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_04.png",
+    "pii": [
+      {
+        "field": "Customer Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Suresh Iyer"
+      },
+      {
+        "field": "Customer ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "GPU1234567",
+        "note": "No published spec; a labels.py case, not a pattern one."
+      },
+      {
+        "field": "Service Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "78, Palm Grove Apartments, Adyar, Chennai - 600020"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "GreenPower Utilities bill. The only non-Bengaluru address in the corpus (Chennai), which is worth keeping if the set is ever trimmed."
+  },
+  "h06_library_membership_form.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_05.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Kavya Reddy"
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "06/07/2001"
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 12345"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "kavya.reddy@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "12, Sunrise Apartments, MG Road, Bengaluru - 560001"
+      },
+      {
+        "field": "Signature (handwritten)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Kavya Reddy"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Library membership application, ENTIRELY handwritten including the field labels — so labels.py has no printed label geometry to anchor to here. The one page in the corpus that tests the label-anchored path by its absence."
+  },
+  "h07_employee_onboarding_form.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_06.png",
+    "pii": [
+      {
+        "field": "Full Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Neha Kapoor"
+      },
+      {
+        "field": "Employee ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "BMT2024-091",
+        "note": "No published spec; a labels.py case."
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "+91 99876 54321"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "neha.kapoor@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "901, 7th Cross, Koramangala, Bengaluru - 560034"
+      },
+      {
+        "field": "Emergency Contact Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Rakesh Kapoor"
+      },
+      {
+        "field": "Emergency Contact Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "91234 87654"
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "BrightMinds Technologies onboarding form with a headshot at the right. Mixed printed and handwritten values on the same page. Date of Joining and Role are not personal identifiers and are not annotated."
+  },
+  "h08_retail_invoice.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_07.png",
+    "pii": [
+      {
+        "field": "Invoice No",
+        "expected_type": null,
+        "tier": "core",
+        "text": "UK24-77890"
+      },
+      {
+        "field": "Bill To (name)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Arjun Deshpande"
+      },
+      {
+        "field": "Bill To (address)",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "34, 5th Main Road, JP Nagar, Bengaluru - 560078",
+        "note": "The generator renders '5th' with a glyph that reads as 'Sth'. Expect OCR to return either; both are correct against this page."
+      },
+      {
+        "field": "Payment Method (UPI)",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "arjun.d@example.com",
+        "note": "Presented as a UPI VPA but shaped as an email address, so EMAIL_ADDRESS is the type that should fire, not IN_UPI_VPA."
+      },
+      {
+        "field": "Transaction ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "UP123456789012"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "UrbanKart invoice with a QR code top-right. The QR is the detect()-not-detectAndDecode() case: it must be located and covered whether or not it decodes."
+  },
+  "h09_doctor_prescription.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_08.png",
+    "pii": [
+      {
+        "field": "Patient Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Meera Thomas"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Amoxicillin 500 mg"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Paracetamol 650 mg"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Levocetirizine 5 mg"
+      },
+      {
+        "field": "Prescriber",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Dr. K. Menon"
+      },
+      {
+        "field": "Medical Registration No.",
+        "expected_type": null,
+        "tier": "core",
+        "text": "123456",
+        "note": "The medical-registration recognizer was one of seven removed in September 2026 for having no cited specification. A bare six-digit number with a label beside it: a labels.py case by construction."
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "CityCare Hospital prescription, drug lines HANDWRITTEN. Age (34) and Gender are quasi-identifiers and are not annotated, matching documents/. The three medications are the --protect-clinical withdrawal case: a clinician downstream must still be able to read them."
+  },
+  "h10_shipping_label.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_09.png",
+    "pii": [
+      {
+        "field": "From (name)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Rohan Verma"
+      },
+      {
+        "field": "From (address)",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "22, Park Street, Bengaluru - 560001"
+      },
+      {
+        "field": "From (phone)",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 67890"
+      },
+      {
+        "field": "To (name)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Sneha Kulkarni"
+      },
+      {
+        "field": "To (address)",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "45, Church Road, Pune - 411001"
+      },
+      {
+        "field": "To (phone)",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "91234 56789"
+      },
+      {
+        "field": "Tracking number",
+        "expected_type": null,
+        "tier": "core",
+        "text": "SSP123456789IN",
+        "note": "Printed beneath the barcode AND encoded in it. Covering the barcode does not cover the printed value; both are needed."
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 1
+    },
+    "notes": "SwiftShip label on crumpled paper — heavy creasing and shadow across the text, the most degraded capture in the corpus. Two separate people on one page, which is the case a single-subject assumption gets wrong."
+  },
+  "h11_student_registration_form.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_10.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Aditya Singh",
+        "note": "DOB 2010 makes this subject a minor."
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "03 / 09 / 2010"
+      },
+      {
+        "field": "Parent/Guardian",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Vikram Singh"
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "99876 54321"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "vikram.singh@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "67, Garden View, Indiranagar, Bengaluru - 560038"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "EduFuture student registration form with a QR code. The parent's signature is an illegible squiggle carrying no readable text, so it is not annotated as a PII item; it still ought to be covered."
+  }
+}

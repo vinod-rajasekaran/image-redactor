@@ -2641,3 +2641,289 @@ with images missing and had to be re-scored. Worth a merge-on-write, or at
 least a warning when the file shrinks.
 
 **Headline unchanged:** 95.8% core (69/72), 90.9% overall (70/77).
+
+---
+
+## 2026-09-18 — A held-out corpus, and a guard because a comment would not have held
+
+`datasets/holdout/` is new: 11 synthetic Indian pages, 71 PII items, 9 of
+them sensitive-tier, generated with an OpenAI image model and contributed by
+the repository owner with one condition — **it may never be used to tune any
+OCR system**, stated as absolute and permanent.
+
+### Why a corpus that is not independent evidence still earns its place
+
+It does not clear the bar `SOURCES.md` sets for evidence. The repository
+owner generated it, which puts it exactly where `datasets/documents/` sits:
+a ceiling on familiar material. Holding it out does not move it across that
+line, and this entry is not claiming otherwise.
+
+What it buys is narrower and was missing. Every self-produced figure here so
+far was measured on images that existed while the recognizers were being
+written — `documents/` most of all, which is why its 95.8% is published as a
+ceiling. `holdout/` will produce **a number nothing was fitted to**. That is
+weaker than independence and stronger than anything else in the
+self-produced half of the table.
+
+It also reaches three cases no image corpus here has had:
+
+- a **Devanagari** name (`नेहा शर्मा`) on an Aadhaar card. The label lexicon
+  has carried Devanagari terms with no image exercising them; `SOURCES.md`
+  lists MIDV-500 as a candidate for exactly this and it is still unfetched.
+- a **second checksum-invalid Aadhaar** — `4123 5687 9012`, Verhoeff
+  verified failing. `IN_AADHAAR` discards checksum failures rather than
+  down-scoring them, so only the OCR-tolerant fallback can cover it. Until
+  now that path had one canary, `documents/04_hospital_admission_report.png`.
+- **two different people on one page** (a shipping label with a sender and a
+  recipient), which any single-subject assumption gets wrong.
+
+### The guard, and why it is code rather than a note
+
+The rule is enforced, not documented and hoped for. `_meta` carries
+`held_out: true`; `redactor.datasets.refuse_if_tuning()` raises
+`HeldOutCorpusError` for the corpus name or any path inside it;
+`benchmark_ocr.py` calls it before the first configuration runs and exits 2;
+`test_holdout_guard.py` pins both directions.
+
+The line drawn is **scoring versus choosing**. One run of an
+already-chosen configuration is the corpus's entire purpose and stays
+allowed — `evaluate_redactor.py --input datasets/holdout/images` works. A
+sweep that picks a backend or a parameter from these images is refused.
+
+A comment would not have held, because this failure is invisible. Sweep
+seven OCR configurations over a held-out corpus and the number that comes
+out looks exactly like the measurement it was before: same images, same
+annotations, same scorer. Nothing in a diff shows that a test set became a
+training set. Compare the two Paddle landmines, which *raised* detection
+counts while *lowering* redaction — they were caught only because someone
+scored leakage instead of counts. This one has no equivalent tell.
+
+### Evidence that the guard works: it was broken on purpose, and it bit
+
+`test_holdout_guard.py` was verified to fail when the protection is removed,
+the way `test_metadata_stripping.py` was. With the flag on, 23 checks pass.
+Setting `_meta.held_out` to `false` produces 10 failures and exit 1;
+restoring it returns all 23.
+
+That verification produced an unplanned demonstration. With the flag off,
+`benchmark_ocr.py` did precisely what it is built to do: it began redacting
+the held-out corpus under six Tesseract configurations and had to be killed,
+leaving **five run folders full of holdout output under `bench_` names**.
+Nothing was read from them and `runs/benchmark.json` was never rewritten —
+the sweep did not finish — and all five directories were deleted. But that
+is how the contamination would arrive in practice: not as a decision anybody
+made, as a default `--input` nobody changed.
+
+The test now bounds its own failure with a 30-second timeout and reports a
+timeout as "it started the sweep instead of refusing". **A test whose
+failure mode is a twenty-minute sweep over the corpus it exists to protect
+is not a safe test.**
+
+### Annotations: text, no boxes, and human-owned
+
+71 items carrying `text` and no `box`. Boxes for these images could only
+come from a vision pass, and per-region coverage from vision boxes was
+built, measured and removed here because those boxes sit about a text row
+off. Text-only matches `documents/`.
+
+The draft is Claude's and is marked
+`labelled_by: "claude-draft-pending-human-audit"`. What counts as PII is a
+policy question for a person, which is why `annotate_inputs.py` reports
+rather than rewrites, and the same reasoning applies to a corpus this
+project did not previously have.
+
+Three judgement calls in the draft are flagged for that audit rather than
+settled quietly:
+
+- **`S020 4433 7788`** (account number, `03_bank_account_statement.png`).
+  The leading glyph is the letter `S`, not a `5` — verified at 8×. Recorded
+  verbatim, because ground truth records what is on the page.
+- **`NR8K0001234`** (IFSC, same page) is **malformed**: RBI requires four
+  alphabetic characters at positions 1–4 and this has an `8` at position 3.
+  `IN_IFSC` therefore cannot fire, by specification. A miss here is the
+  image's fault, and `IN_IFSC` must not be widened to catch it — that
+  recognizer is one of the few that clears the cited-specification bar.
+- **`UPI/9876543210`** in a transaction narration is a bare 10-digit number
+  shaped exactly like an Indian mobile. Genuinely ambiguous. Annotated as an
+  item, because over-redaction is this project's stated preference, but it
+  is a person's call.
+
+`Medical Conditions: None` on the ID card is deliberately **not** annotated:
+the value is the word "None", so there is nothing to conceal and a
+legibility verdict on it would mean nothing.
+
+### No number is published in this entry
+
+The corpus is registered and scored nothing. `VALIDATION.md` records it as
+*registered, not yet scored*. The headline stays **95.8% core (69/72),
+90.9% overall (70/77)** on `documents/`, unchanged by this entry.
+
+---
+
+## 2026-09-18 — Signature geometry measured against the cue word, not the page
+
+`detect.py` sized its signature search window as fractions of the whole
+image — `int(width * 0.14)`, `int(height * 0.28)`, `int(height * 0.04)` —
+and its minimum-ink filter as fractions of the crop. Both are constants that
+describe the sheet rather than the document printed on it. They are now
+multiples of the **cue word's own height**: `SIGNATURE_PAD_X_RATIO = 14.0`,
+`SIGNATURE_LOOK_UP_RATIO = 12.5`, `SIGNATURE_LOOK_DOWN_RATIO = 2.0`,
+`SIGNATURE_MIN_INK_WIDTH_RATIO = 3.4`, `SIGNATURE_MIN_INK_HEIGHT_RATIO = 1.25`.
+
+### Why the old form never showed up in any score
+
+Every cheque in the corpus has the same aspect and the same body text size,
+so the two formulations agree to within a few percent there: across the cue
+words found on the ten cheques the page-relative window works out at
+13.2–14.4, 12.2–13.4 and 1.7–1.9 times the cue word's height. The ratios
+above are that same window. A corpus of one shape cannot distinguish a
+constant that measures the text from one that measures the page.
+
+What separates them is padding the same page onto a different canvas — a
+photograph of a cheque on A4, or on a phone screen. There the page-relative
+window stops being a band above the label and sweeps most of the document,
+so the largest sprawling blob in it is some other field's ink: of six
+detected signatures, two are lost outright and two move onto unrelated ink,
+which leaves the signature legible *and* blacks out something else.
+`test_geometry_invariance.py` finds this with no new corpus — the same page
+with more margin is a different problem to a constant that measures the page.
+
+### Verification: the cheque score does not move
+
+Required before calling this a refactor rather than a rewrite.
+
+| measure | published | after |
+|---|---|---|
+| signature coverage | 75% | **75%** |
+| payee name coverage | 71% | **71%** |
+| account number coverage | 39% | **39%** |
+| signatures detected | 7 of 10 | **7 of 10** |
+
+Identical on every field. `runs/verify-cheques`.
+
+### The residual, which is Otsu and not geometry
+
+One case does not hold, and it is worth stating precisely because it looks
+like a geometry failure and is not. `canara_syn_0009.jpg` padded to
+landscape 3:1 loses its one signature region. The *wanted* window is
+747×387 before and after — the ratios are doing their job. What changes is
+clipping: unpadded, the window runs 29px off the right edge and is cut to
+718 wide; padded, it fits. Those 29 columns of white shift the Otsu
+threshold over that crop from **140 to 210**, and the region is lost.
+
+Back-filling the clipped window was tried and rejected: filling with white
+or by replication puts invented pixels into a histogram computed over
+exactly that region, and it changed what was found on *unpadded* pages —
+three signatures on this corpus. A clipped window is less input, which is
+honest.
+
+So `test_geometry_invariance.py` **reports** clipped-window divergences
+rather than asserting on them, and only on the axis the padding actually
+grows — vertical padding cannot un-clip a right-hand edge, which is why the
+same image passes at portrait 1:2 and diverges at landscape 3:1.
+
+**The exemption is wider than one image and the test now says so.** On the
+cheque corpus the cue word sits near the right margin, so 5 of the 6
+signature-bearing cheques already run their window off the right edge.
+Horizontal padding is therefore weak evidence here; the crop and
+vertical-padding cases carry the claim. The test prints that coverage with
+every run, because an exemption nobody can see is an exemption that grows.
+
+**Count to watch:** 1 reported case of 26 checks. A rising number means the
+detector is getting more sensitive to how much margin a scan happens to
+have, not less.
+
+### A hazard found while verifying this
+
+`cheque_benchmark.py` with no arguments **re-fetches and rewrites**
+`datasets/cheques/` — it replaced the committed 10-image subset with a
+different one (adding `axis_syn_0061`, `canara_syn_0082`,
+`syndicate_syn_0036`, `syndicate_syn_0037`) and rewrote `annotations.json`,
+122 insertions and 167 deletions. The tracked images survived and
+`git checkout` restored the annotations, but the corpus is committed
+precisely so that published figures reproduce from a clone, and a bare run
+of the benchmark script silently invalidates that. **To score cheques, use
+`--score`:** `python cheque_benchmark.py --score runs/<name>`. The bare form
+is the fetch-and-rebuild path, not the scoring path.
+
+---
+
+## 2026-09-18 — `holdout/` scored once: 78.9%, and what the 12-point gap means
+
+First and only score of `datasets/holdout/`, vision-scored, defaults, no
+flags, `runs/holdout`. **56 of 71 redacted — 78.9%.** Core 53/62 (85.5%),
+sensitive 3/9 (33.3%). `vision_score.py` and `score_run.py` differ by one
+item (57/14 against 56/15), the same 0–1 noise band `documents/` shows, so
+the floor is published.
+
+Against `documents/`' 90.9% overall, this is **12 points lower on the same
+project's own images.** That is the corpus doing its job rather than a
+regression: the recognizers were written while looking at `documents/` and
+have never seen these pages. The honest reading is that roughly 12 points of
+the `documents/` figure is familiarity, which is why `VALIDATION.md` has
+always called it a ceiling. This is the first number here that quantifies it.
+
+### The largest block of failure is not a pattern gap
+
+Nine of the fifteen leaks carry `expected_type: null` — no recognizer exists
+or should: `S020 4433 7788`, `GPU1234567`, `BMT2024-091`, `UK24-77890`,
+`SSP123456789IN`, and similar. This is the September 2026 decision playing
+out exactly as predicted: seven invented-shape recognizers were removed on
+the grounds that anything without a cited specification is a label problem,
+and here 60% of the leakage is precisely that. It is evidence for
+`labels.py` and against ever restoring those patterns.
+
+### The Aadhaar fallback held on an image it had never seen
+
+`4123 5687 9012` fails Verhoeff — verified — so `IN_AADHAAR` discards it and
+only the OCR-tolerant fallback can reach it. **It was covered:** IN_AADHAAR
+scores 1 redacted, 0 leaked. The fallback now has a second regression canary
+that is not `documents/04_hospital_admission_report.png`, on a photorealistic
+card rather than a Pillow render.
+
+### "English only" is now measured rather than asserted
+
+The Devanagari name `नेहा शर्मा` leaked. The README has listed Devanagari and
+Kannada as never detected; until now no image corpus here contained any, so
+the limitation was stated on reasoning alone. It is now a measurement, and
+the two names on that card — one Devanagari, one Latin, same person — make
+the comparison direct: the Latin form was covered and the Devanagari was not.
+
+### Two hazards found while producing this score
+
+**`vision_score.py` and `score_run.py` silently scored the wrong corpus.**
+Both read `REDACTOR_CORPUS` and default to `documents`. The holdout run was
+first scored without it, and because `holdout/01_aadhaar_card.png` collided
+exactly with `documents/01_aadhaar_card.png`, one page matched: the output
+read `4 redacted, 1 leaked` and named `Rajesh Kumar Sharma`, who is on the
+*documents* card. A whole-corpus verdict shape, carrying one page's numbers,
+graded against a different document's ground truth, with nothing in the
+output saying so. The item-count check in `CLAUDE.md` is what caught it.
+
+Fixed twice over. Holdout filenames now carry an `h` prefix so no corpus's
+filenames collide. And `redactor.datasets.check_run_matches()` refuses to
+score a run when fewer than half its images appear in the chosen corpus,
+naming the corpus that does match:
+
+    score_run.py: this run's images are not corpus 'documents'.
+      0 of 11 image(s) in runs/holdout/images appear in 'documents''s ground truth.
+      Those images look like corpus 'holdout'. Re-run with REDACTOR_CORPUS=holdout ...
+
+Both scorers exit 2 on it. This is the "don't ship a metric that lies" rule
+applied to the scorer itself.
+
+**Duplicate values share one verdict.** `vision_score.py` dedupes by text
+within a page, so a signature annotated with the same text as the printed
+name — `Arjun Mehta`, `Kavya Reddy` — is asked about once and both items
+inherit the answer. Per-page counts are of unique values (69) while the
+totals are of items (71). Not wrong, but a signature is a different object
+from a printed name and a verdict on one is weak evidence about the other.
+Worth separating if signature coverage is ever measured directly.
+
+### Not tuned, and that is the whole point
+
+No parameter was chosen from any of this. The sensitive tier at 3/9 would go
+up with `--medical-ner`; the nine label-shaped leaks would move with changes
+to `labels.py`. **Neither may be decided from these images.** If a change is
+made, the evidence comes from `cheques/`, IndiaPII-Bench or maskara, and this
+corpus gets re-scored afterwards to see what happened — once.

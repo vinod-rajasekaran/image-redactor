@@ -56,6 +56,74 @@ with reality, and the scores split exactly along that line:
 the generator that made them was deleted with them, so that no later
 session could reach for it.
 
+### `holdout/` — first score, 2026-09-18
+
+`datasets/holdout/` is an 11-page, 71-item corpus generated with an OpenAI
+image model, prompted by the repository owner, and **held out: no OCR system
+may ever be tuned on it.** Its first and only score, vision-scored, defaults,
+`runs/holdout`:
+
+| tier | redacted | leaked | floor |
+|---|---:|---:|---:|
+| core | 53 | 9 | **85.5%** |
+| sensitive | 3 | 6 | **33.3%** |
+| **all** | **56** | **15** | **78.9%** |
+
+Publish the floor. `vision_score.py` and `score_run.py` disagree by one item
+on this run — 57/14 against 56/15 — which is the same 0–1 noise band the
+`documents/` scoring shows, landing on partial coverage.
+
+**78.9% against 90.9% on `documents/` is the point of the corpus, not a
+regression.** Both are this project's own images; the difference is that the
+recognizers were written while looking at one of them and have never seen the
+other. Read the 12-point gap as the cost of familiarity in the `documents/`
+figure.
+
+Where the items went:
+
+| expected type | redacted | leaked |
+|---|---:|---:|
+| (no recognizer) | 10 | **9** |
+| PERSON | 17 | 3 |
+| LOCATION | 7 | 3 |
+| PHONE_NUMBER | 10 | 0 |
+| EMAIL_ADDRESS | 6 | 0 |
+| DATE_TIME | 5 | 0 |
+| IN_AADHAAR | 1 | 0 |
+
+Three things that matter more than the headline:
+
+- **The checksum-invalid Aadhaar was covered.** `4123 5687 9012` fails
+  Verhoeff, so `IN_AADHAAR` discards it and only the OCR-tolerant fallback
+  can reach it. It did. That fallback now has a second canary that is not
+  `documents/04_hospital_admission_report.png`.
+- **Nine of the fifteen leaks have no recognizer behind them** — account
+  numbers, customer and employee IDs, invoice and transaction numbers, a
+  tracking number. These are label problems, not pattern ones, exactly as
+  `labels.py` exists to address, and they are the largest single block of
+  failure here.
+- **The Devanagari name leaked**, as the README's "English only" limitation
+  predicts. This is the first time that limitation has been *measured* on an
+  image rather than asserted.
+
+The sensitive tier is 3 of 9 with `--medical-ner` off, which is the
+documented default.
+
+It sits in the "produced by this project" half of the table above, and
+holding it out does not move it across. The repository owner generated it,
+so it shares `documents/`'s standing — a ceiling on familiar material, not
+independent evidence. What it adds is narrower and real: **a number nothing
+here was fitted to.** Every other self-produced figure in this project was
+measured on images that were available while the recognizers were being
+written; this one will not be.
+
+Read its first score with two things in mind. Nine of its 11 pages are about
+471×363, so a miss there may be measuring resolution rather than detection.
+And three of its cases exist nowhere else in this project's images — a
+Devanagari name, a second checksum-invalid Aadhaar, and two people on one
+page — so a low score may be the corpus reaching past what has ever been
+measured rather than a regression.
+
 ---
 
 ## What is actually measured

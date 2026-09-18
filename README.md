@@ -165,11 +165,20 @@ the generator is optional. Supported: `.png .jpg .jpeg .tiff .bmp`.
 
 Validation corpora live under `datasets/` — images and annotations
 together, one schema, one loader. Every image is synthetic: no real
-person, document or account appears anywhere in this repo. `documents/`
-and `cheques/` are committed, so their benchmarks reproduce from a clone
-alone; the third-party corpora under `text/` and `ktp/` are fetched on
-demand. Licences and provenance per corpus:
+person, document or account appears anywhere in this repo. `documents/`,
+`cheques/` and `holdout/` are committed, so their benchmarks reproduce from
+a clone alone; the third-party corpora under `text/` and `ktp/` are fetched
+on demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
+
+`datasets/holdout/` is a **held-out test set of 11 pages and 71 items, and
+no OCR system may ever be tuned on it** — not backend selection, not PSM,
+not upscale factors, not preprocessing variants, not thresholds.
+Scoring it once with a configuration chosen elsewhere is its purpose;
+sweeping configurations over it and keeping the winner is forbidden.
+`redactor.datasets.refuse_if_tuning()` enforces that, `benchmark_ocr.py`
+refuses such a sweep with exit code 2, and `test_holdout_guard.py` pins both
+the refusal and the fact that ordinary scoring still works.
 
 ### Options
 
@@ -541,6 +550,7 @@ Every default rests on measured evidence, and several are deliberately
 | | |
 |---|---|
 | `datasets/documents/` | Fully synthetic and freely redistributable. **Every image and annotation in it is AI-generated**: 01–10 rendered by a script Claude wrote, with values Claude chose; 11–20 by an OpenAI image model; the annotations by Claude, audited by a person. Purely AI-generated work generally cannot be copyrighted for want of human authorship, so no copyright is asserted over any of it and nothing restricts redistribution. The MIT grant covers the code and the human-directed selection and curation. |
+| `datasets/holdout/` | Fully synthetic and freely redistributable, on the same footing as `datasets/documents/`: generated with an OpenAI image model prompted by the repository owner, annotations drafted by Claude and owned by a person. **Held out — no OCR system may ever be tuned on it.** |
 | `datasets/cheques/` | Apache-2.0, from [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images). Attribution is in the corpus `_meta`. |
 | `datasets/text/` | Third-party, **not committed**, fetched on demand: IndiaPII-Bench (CC-BY-4.0) and maskara-indian-pii-200k (MIT). |
 
@@ -709,6 +719,15 @@ spaced forms (`AGNVL 0925 B`) that people write and OCR produces.
 - **Signatures** are found only when a printed cue word sits nearby; the
   detector fires on 7 of the 10 cheques, though other boxes leave the
   signature unreadable on 9.
+- **The signature search window is measured against the cue word's own
+  height**, not against the page, so the amount of margin around a scan does
+  not change it. One residual survives: where the window runs off a page
+  edge it is not back-filled, so adding margin widens the crop and moves the
+  Otsu threshold — on `canara_syn_0009.jpg` that shifts it 140 to 210 and
+  costs the region. `test_geometry_invariance.py` asserts the invariance and
+  reports those clipped-window cases separately rather than folding them in.
+  On the cheque corpus the cue word sits near the right margin, so clipping
+  is the norm and horizontal padding is weak evidence there.
 - **Spaced PAN** — `AGNVL 0925 B` — is missed; the unspaced form is not.
 - **English only.** Names and addresses in Devanagari or Kannada — present
   on real Aadhaar cards and utility bills — are never detected.
@@ -772,6 +791,7 @@ cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
 compare_runs.py             diff two scored runs: marginal catch vs cost
 test_labels.py              label geometry, hand-built OCR
+test_geometry_invariance.py does a spatial constant describe text or page
 test_clinical.py            what clinical protection will not withdraw
 test_vlm.py                 vision-model reply parsing
 check_docs.py               README present tense + references resolve

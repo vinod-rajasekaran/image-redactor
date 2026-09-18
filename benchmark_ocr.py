@@ -20,6 +20,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+from redactor import datasets
+
 console = Console()
 
 CONFIGS = [
@@ -83,6 +85,17 @@ def main() -> None:
         help="Corpus to run every configuration over",
     )
     args = parser.parse_args()
+
+    # This script picks an OCR configuration by score, which is tuning. A
+    # held-out corpus may be scored once with a configuration chosen
+    # elsewhere; it may not be the thing that chooses one.
+    try:
+        datasets.refuse_if_tuning(
+            args.input, purpose="Sweeping OCR configurations with benchmark_ocr.py"
+        )
+    except datasets.HeldOutCorpusError as exc:
+        console.print(f"[red]refused[/red]\n{exc}")
+        raise SystemExit(2)
 
     configs = [c for c in CONFIGS if not (args.quick and c[0] == "paddle")]
     results = []

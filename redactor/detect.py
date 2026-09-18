@@ -237,6 +237,61 @@ SIGNATURE_MAX_FILL = 0.85  # above this a component is a printed rule or block
 SIGNATURE_MAX_COMPONENTS = 80
 SIGNATURE_MIN_LARGEST_FRACTION = 0.30
 
+# Where to look for the ink, in multiples of the **cue word's own height**.
+#
+# These were fractions of the page — 0.14 of its width, 0.28 and 0.04 of its
+# height — which is a constant describing the sheet rather than the document
+# printed on it. Every cheque in the corpus has the same aspect and the same
+# body text size, so the two formulations agreed to within a few percent
+# there and the difference never showed: across the cue words found on the
+# ten cheques, the page-relative window worked out at 13.2-14.4, 12.2-13.4
+# and 1.7-1.9 times the cue word's height. The ratios below are that same
+# window, which is why the cheque score does not move.
+#
+# What moves is everything else. Pad a cheque onto a portrait page — a
+# photograph of one on a sheet of A4, or on a phone screen — and the
+# page-relative window stopped being a band above the label and swept most
+# of the document, so the largest sprawling blob in it was some other
+# field's ink: of six detected signatures, two were lost outright and two
+# moved onto unrelated ink, which leaves the signature legible *and* blacks
+# out something else. `test_geometry_invariance.py` pins that, and needed no
+# new corpus to find it — the same page with more margin is a different
+# problem to a constant that measures the page.
+SIGNATURE_PAD_X_RATIO = 14.0
+SIGNATURE_LOOK_UP_RATIO = 12.5
+SIGNATURE_LOOK_DOWN_RATIO = 2.0
+
+# How big the ink has to be before it can be a signature, in the same unit.
+# These were fractions of the *crop* — 0.12 of its width, 0.08 of its height
+# — which carries the same fault one layer down and by a less obvious route:
+# the crop is clipped at the page edge, so for a cue word near a margin the
+# threshold silently shrank with it, and two more signatures were lost when
+# padding gave the window room to reach its full size. On the corpus the
+# unclipped crop is about 28 cue-word-heights wide and 15.5 tall, so these
+# are the same filter expressed against something that does not move.
+SIGNATURE_MIN_INK_WIDTH_RATIO = 3.4
+SIGNATURE_MIN_INK_HEIGHT_RATIO = 1.25
+
+
+def signature_search_window(lx: int, ly: int, lw: int, lh: int) -> tuple:
+    """Where `detect_signatures` looks for ink, given a cue word's box.
+
+    Returned in image coordinates and *unclipped*, so a caller can see the
+    whole region the detector reads even where it runs off the page. Exposed
+    so `test_geometry_invariance.py` can ask rather than restate the
+    arithmetic — a test that hardcodes a copy of the thing it checks stops
+    being a check the first time the original changes.
+    """
+    pad_x = int(lh * SIGNATURE_PAD_X_RATIO)
+    up = int(lh * SIGNATURE_LOOK_UP_RATIO)
+    down = int(lh * SIGNATURE_LOOK_DOWN_RATIO)
+    return (lx - pad_x, ly - up, lx + lw + pad_x, ly + lh + down)
+
+
+def is_signature_cue(token: object) -> bool:
+    """Is this OCR token a word that anchors a signature search?"""
+    return str(token).strip().lower().strip(".:,;") in SIGNATURE_CUES
+
 
 def _looks_handwritten(crop) -> bool:
     _, mask = cv2.threshold(crop, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -278,19 +333,30 @@ def detect_signatures(image: Image.Image, ocr_data: dict | None = None):
 
     regions: list[VisualRegion] = []
     for i, raw in enumerate(data["text"]):
-        token = str(raw).strip().lower().strip(".:,;")
-        if token not in SIGNATURE_CUES:
+        if not is_signature_cue(raw):
             continue
 
         lx, ly = data["left"][i], data["top"][i]
         lw, lh = data["width"][i], data["height"][i]
-        # Signatures sit above the label far more often than below it.
-        pad_x, up, down = int(width * 0.14), int(height * 0.28), int(height * 0.04)
-        x0, y0 = max(0, lx - pad_x), max(0, ly - up)
-        x1, y1 = min(width, lx + lw + pad_x), min(height, ly + lh + down)
+        # Measured against the cue word's own height, never the page. See
+        # the note on the ratios above for what the page-relative version
+        # cost. Signatures sit above the label far more often than below it.
+        want = signature_search_window(lx, ly, lw, lh)
+        x0, y0 = max(0, want[0]), max(0, want[1])
+        x1, y1 = min(width, want[2]), min(height, want[3])
         crop = grey[y0:y1, x0:x1]
         if crop.size == 0:
             continue
+        # The window is deliberately *not* back-filled where the page edge
+        # cuts it short. Filling it — with white, or by replication — puts
+        # invented pixels into the Otsu histogram computed over exactly this
+        # region, and that changed what was found on unpadded pages: three
+        # signatures on this corpus. A clipped window is less input, which is
+        # honest; the residual is that a cue word within ~14 of its own
+        # heights of the edge reads a smaller region than one in open page.
+        # `test_geometry_invariance.py` reports those cases rather than
+        # asserting on them, since the difference there is Otsu, not a
+        # constant that encodes the shape of the page.
 
         _, mask = cv2.threshold(
             crop, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
@@ -301,9 +367,11 @@ def detect_signatures(image: Image.Image, ocr_data: dict | None = None):
         count, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
 
         best = None
+        min_w = lh * SIGNATURE_MIN_INK_WIDTH_RATIO
+        min_h = lh * SIGNATURE_MIN_INK_HEIGHT_RATIO
         for j in range(1, count):
             x, y, w, h, area = stats[j]
-            if w < crop.shape[1] * 0.12 or h < crop.shape[0] * 0.08:
+            if w < min_w or h < min_h:
                 continue
             fill = area / max(w * h, 1)
             if fill > SIGNATURE_MAX_FILL:

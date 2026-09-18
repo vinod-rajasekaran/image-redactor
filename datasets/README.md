@@ -15,6 +15,7 @@ is where a script reads it from.
 | corpus | n | tracked | annotation | provenance | licence |
 |---|---:|---|---|---|---|
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
+| `holdout/` | 11 | yes | text | generated with an OpenAI image model, prompted by the repository owner | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
 | `ktp/` | 20 | no | box + text | [`cloverx-id/indonesian-id-card-dummy`](https://huggingface.co/datasets/cloverx-id/indonesian-id-card-dummy), publisher-declared dummy data | CC-BY-4.0 |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
 | `text/` | 2 files, 2.2MB | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
@@ -26,6 +27,39 @@ nothing else. maskara adds an `ocr` domain of deliberately corrupted text
 and `hard_negative` decoys, which is how the Aadhaar OCR-tolerance was
 justified and how the PAN spacing gap was pinned on the pattern rather
 than the reader.
+
+## `holdout/` is held out, and the guard is not advisory
+
+`holdout/` **may never be used to tune any OCR system** — not backend
+selection, not PSM, not upscale factors, not preprocessing variants, not
+thresholds. The line is between scoring and choosing: running it once with a
+configuration decided elsewhere is the corpus's whole purpose, while sweeping
+configurations over it and keeping the winner is forbidden.
+
+That distinction is enforced rather than written down and hoped for.
+`_meta` carries `held_out: true`, `redactor.datasets.refuse_if_tuning()`
+raises `HeldOutCorpusError` for the corpus name or any path inside it,
+`benchmark_ocr.py` calls it before the first configuration runs, and
+`test_holdout_guard.py` pins both directions — that tuning is refused, and
+that loading and scoring still work. The guard exists because the failure is
+invisible: a sweep over a held-out corpus yields a number that looks exactly
+like the measurement it used to be, and no diff shows that a test set
+quietly became a training set.
+
+**Holding it out does not make it independent evidence.** The repository
+owner generated it, so it shares `documents/`'s standing — a ceiling on
+familiar material. What it buys is a score no parameter here was fitted to,
+which is narrower than independence and still worth having. Independent
+evidence stays `cheques/`, IndiaPII-Bench and maskara.
+
+Three things in it exist nowhere else here: a **Devanagari** name on an
+image, where the label lexicon's Devanagari terms have never been exercised;
+a **second checksum-invalid Aadhaar**, which only the OCR-tolerant fallback
+can cover; and a page carrying **two different people**, which any
+single-subject assumption gets wrong. Nine of its 11 images are about
+471×363, so character heights are small and the upscale-by-character-height
+path carries most of the load — a low score on those pages may be measuring
+resolution rather than detection.
 
 `ktp/` is **Indonesian**, and is here because the label-to-value geometry
 it validates is locale-independent while no Indian form corpus exists that

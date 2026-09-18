@@ -128,6 +128,11 @@ def main() -> None:
     from redactor import datasets
 
     corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    try:
+        datasets.check_run_matches(corpus, images_dir, script="vision_score.py")
+    except datasets.CorpusMismatchError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
     truth = corpus.annotations
 
     verdicts: dict[str, dict[str, str]] = {

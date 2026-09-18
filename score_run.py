@@ -122,6 +122,13 @@ def main() -> None:
     from redactor import datasets
 
     corpus = datasets.load(os.environ.get("REDACTOR_CORPUS", "documents"))
+    try:
+        datasets.check_run_matches(
+            corpus, run_dir / "images", script="score_run.py"
+        )
+    except datasets.CorpusMismatchError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(2)
     truth = corpus.annotations
 
     # Verdicts recorded by looking at the output images. The OCR scorer can
