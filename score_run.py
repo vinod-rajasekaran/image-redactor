@@ -139,9 +139,14 @@ def main() -> None:
     vision_path = run_dir / "vision_verdicts.json"
     vision = json.loads(vision_path.read_text()) if vision_path.exists() else {}
     if vision:
+        # Keys beginning with an underscore are metadata blocks (`_note`,
+        # `_visual`), not pages. Counting them summed the characters of a
+        # string and reported it as an item count.
+        pages = {k: v for k, v in vision.items() if not k.startswith("_")}
         console.print(
             f"[cyan]Using vision verdicts for "
-            f"{sum(len(v) for v in vision.values())} item(s)[/cyan]"
+            f"{sum(len(v) for v in pages.values())} item(s) "
+            f"across {len(pages)} image(s)[/cyan]"
         )
     input_dir = corpus.images
     images_dir = run_dir / "images"
@@ -238,6 +243,46 @@ def main() -> None:
         f"(scorer OCR could not read them either way)"
     )
 
+    # Visual PII is reported as its own block and deliberately kept OUT of the
+    # item totals. Those totals are what every published figure quotes, and
+    # folding a new measurement into them would move the headline without a
+    # single detection changing. It is a separate question and gets a separate
+    # number.
+    visual = vision.get("_visual") or {}
+    visual_totals = {"annotated": 0, "surviving": 0}
+    if visual:
+        vt = Table(title="Visual PII — what survives redaction")
+        vt.add_column("image", style="cyan")
+        vt.add_column("kind")
+        vt.add_column("annotated", justify="right")
+        vt.add_column("still visible", justify="right", style="bold")
+        for name, v in sorted(visual.items()):
+            for kind in ("face", "qr_code", "barcode"):
+                a, sv = v["annotated"].get(kind, 0), v["surviving"].get(kind, 0)
+                visual_totals["annotated"] += a
+                visual_totals["surviving"] += sv
+                if a or sv:
+                    vt.add_row(
+                        name, kind, str(a),
+                        f"[red]{sv}[/red]" if sv else "[green]0[/green]",
+                    )
+        console.print(vt)
+        a, sv = visual_totals["annotated"], visual_totals["surviving"]
+        console.print(
+            f"[bold]{a - sv} of {a} annotated visual region(s) covered[/bold]"
+            if a else "[dim]no visual regions annotated[/dim]"
+        )
+        extra = sum(
+            max(0, v["surviving"].get(k, 0) - v["annotated"].get(k, 0))
+            for v in visual.values() for k in ("face", "qr_code", "barcode")
+        )
+        if extra:
+            console.print(
+                f"[yellow]{extra} visible region(s) on pages annotated with "
+                f"none — either missed annotations or the scorer seeing things. "
+                f"Resolve before quoting this number.[/yellow]"
+            )
+
     score_path = run_dir / "score.json"
     score_path.write_text(
         json.dumps(
@@ -251,6 +296,8 @@ def main() -> None:
                 "by_type": per_type,
                 "by_tier": per_tier,
                 "by_image": {n: c for n, _s, c in rows},
+                "visual": visual,
+                "visual_totals": visual_totals,
             },
             indent=2,
         )

@@ -132,6 +132,35 @@ measured rather than a regression.
 
 ## What is actually measured
 
+### Visual PII — measured from 2026-09-18, and reported separately
+
+Faces, QR codes and barcodes are **not** part of any recall figure in this
+file. They were unmeasured entirely until 2026-09-18; they are now scored as
+legibility by `vision_score.py` and reported as their own block, outside the
+item totals, so no published headline moved when the measurement arrived.
+
+Detector precision and recall against a vision-proposed ground truth
+(`audit_visual.py`, 41 images across `documents/`, `cheques/` and
+`holdout/`):
+
+| kind | true positives | false positives | missed | precision | recall |
+|---|---:|---:|---:|---:|---:|
+| face | 5 | 0 | 0 | **100%** | **100%** |
+| barcode | 6 | 0 | 0 | **100%** | **100%** |
+| qr_code | 4 | 3 | 2 | **57%** | **67%** |
+
+**Trust this less than the text figures, for two reasons.** The ground truth
+is model-proposed and human-unconfirmed — `runs/visual_audit.json` holds the
+proposal and no corpus has been changed to match it. And the counts are tiny:
+one QR is fourteen points of recall.
+
+**QR is the only weak visual detector and it fails both ways** — two false
+positives on `documents/`, one on `cheques/`, two misses on `holdout/`. No
+fix has been made, because no single preprocessing path wins on both corpora;
+see `DECISIONS.md` for the measured comparison.
+
+Known annotation gap: `cheques/` has three real barcodes annotated nowhere.
+
 ### Independent evidence
 
 | what | data | who made it | licence | result |

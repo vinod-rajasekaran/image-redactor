@@ -108,12 +108,76 @@ def score_image(client, model: str, image_path: Path, items: list[str]) -> dict:
     return json.loads(text)
 
 
+# --- visual PII ---------------------------------------------------------------
+
+VISUAL_PROMPT = """This is a REDACTED document image. Report only what is still
+visible in it.
+
+Answer three questions about what survives redaction:
+
+- **face**: is a person's face still visible — enough to recognise them?
+  A photograph fully covered by a box is not visible.
+- **qr_code**: is a QR code still intact — the finder squares and the data
+  area unobscured, so a phone could plausibly scan it? A QR encodes what is
+  printed beside it and sometimes more: an Aadhaar QR carries the holder's
+  name, date of birth and address, so an intact code beside a blacked-out
+  number is not a redaction.
+- **barcode**: is a 1-D barcode still intact — bars unobscured across their
+  full width?
+
+Count only codes and faces that are part of the document. Report the number
+still intact, which may be zero. Judge what you can see, not what ought to be
+there; if a code is partly covered but the data area looks readable, count it.
+"""
+
+VISUAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "face": {"type": "integer"},
+        "qr_code": {"type": "integer"},
+        "barcode": {"type": "integer"},
+        "note": {"type": "string"},
+    },
+    "required": ["face", "qr_code", "barcode", "note"],
+    "additionalProperties": False,
+}
+
+
+def score_visual(client, model: str, image_path: Path) -> dict:
+    """How many faces, QR codes and barcodes survive in the redacted output.
+
+    Asked as *legibility*, not as a detection count, for the same reason the
+    text scoring is: what matters is whether the thing is still usable to
+    someone holding the output, not whether a detector fired. A QR covered by
+    a box that leaves its data area readable is a leak; one the detector never
+    found but another box happened to cover is not.
+    """
+    response = client.messages.create(
+        model=model,
+        max_tokens=2048,
+        thinking={"type": "adaptive"},
+        output_config={"format": {"type": "json_schema", "schema": VISUAL_SCHEMA}},
+        messages=[{"role": "user", "content": [
+            encode_image(image_path),
+            {"type": "text", "text": VISUAL_PROMPT},
+        ]}],
+    )
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"Refused: {getattr(response, 'stop_details', None)}")
+    return json.loads(next(b.text for b in response.content if b.type == "text"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_dir")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--limit", type=int, default=None, help="Only score the first N images"
+    )
+    parser.add_argument(
+        "--no-visual", action="store_true",
+        help="Skip the face/QR/barcode pass. Halves the cost and leaves the "
+             "visual layer unmeasured, which is how it went unmeasured until now.",
     )
     args = parser.parse_args()
 
@@ -144,9 +208,13 @@ def main() -> None:
     }
     totals = {"leaked": 0, "redacted": 0}
 
+    # A page with only a QR and no text PII still needs looking at, and a page
+    # with no annotation at all is how an un-annotated code stays invisible.
     names = [n for n in sorted(truth) if truth[n]["pii"] and (images_dir / n).exists()]
+    visual_names = [n for n in sorted(truth) if (images_dir / n).exists()]
     if args.limit:
         names = names[: args.limit]
+        visual_names = visual_names[: args.limit]
 
     for name in names:
         items = [p["text"] for p in truth[name]["pii"]]
@@ -170,6 +238,33 @@ def main() -> None:
             f"[{colour}]{name:34s} {len(leaked)} leaked of {len(page)}[/{colour}]"
             + (f"  {leaked}" if leaked else "")
         )
+
+    if not args.no_visual:
+        console.print("\n[bold]visual PII — what survives redaction[/bold]")
+        visual: dict[str, dict] = {}
+        for name in visual_names:
+            try:
+                seen = score_visual(client, args.model, images_dir / name)
+            except Exception as exc:
+                console.print(f"[red]{name}: {exc}[/red]")
+                continue
+            want = truth[name].get("visual") or {}
+            kinds = ("face", "qr_code", "barcode")
+            surviving = {k: int(seen.get(k, 0)) for k in kinds}
+            visual[name] = {
+                "annotated": {k: int(want.get(k, 0)) for k in kinds},
+                "surviving": surviving,
+                "note": seen.get("note", ""),
+            }
+            bad = [f"{k} {surviving[k]}" for k in kinds if surviving[k]]
+            unannotated = [
+                k for k in kinds if surviving[k] and not int(want.get(k, 0))
+            ]
+            if bad:
+                flag = "  [yellow](not annotated: " + ", ".join(unannotated) + ")[/yellow]" \
+                    if unannotated else ""
+                console.print(f"[red]{name:34s} still visible: {', '.join(bad)}[/red]{flag}")
+        verdicts["_visual"] = visual
 
     out = run_dir / "vision_verdicts.json"
     out.write_text(json.dumps(verdicts, indent=2, ensure_ascii=False))

@@ -158,6 +158,7 @@ python evaluate_redactor.py --input datasets/documents/images
 python vision_score.py runs/<name>      # ask Claude what survived
 python score_run.py runs/<name>         # the score, a report, and the trend
 python annotate_leaks.py runs/<name>    # draw the failures onto the images
+python audit_visual.py --run runs/<name>  # visual ground truth + precision/recall
 
 python run_all.py <name>                # all three corpora, one folder, one report
 ```
@@ -234,6 +235,26 @@ sweeping configurations over it and keeping the winner is forbidden.
 `redactor.datasets.refuse_if_tuning()` enforces that, `benchmark_ocr.py`
 refuses such a sweep with exit code 2, and `test_holdout_guard.py` pins both
 the refusal and the fact that ordinary scoring still works.
+
+### Visual PII is measured separately
+
+Faces, QR codes and barcodes are scored on their own and **kept out of the
+item totals**, because those totals are what every published figure quotes and
+folding a new measurement into them would move the headline without a single
+detection changing.
+
+`vision_score.py` asks what survives redaction — is a face still recognisable,
+is a QR's data area still scannable — rather than counting detections, for the
+same reason the text scoring does. `audit_visual.py` reads the **unredacted
+originals** to propose a ground truth, then reports the detector's precision
+and recall against it. It writes `runs/visual_audit.json` and never touches
+`datasets/`: what counts as PII is a person's decision, and a truth generated
+by the same model family that grades the output is not independent evidence.
+
+Measured against that proposed truth: **faces 100% precision and 100% recall,
+barcodes 100% and 100%, QR codes 57% and 67%.** QR is weak in both directions
+— two false positives on `documents/`, two misses on `holdout/` — and is the
+one visual detector worth work.
 
 ### Options
 
@@ -846,6 +867,7 @@ cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
 compare_runs.py             diff two scored runs: marginal catch vs cost
 run_all.py                  all three corpora into one folder and one report
+audit_visual.py             propose visual ground truth; score face/QR/barcode
 redactor/report.py          per-run HTML report and benchmarks/history.jsonl
 test_labels.py              label geometry, hand-built OCR
 test_geometry_invariance.py does a spatial constant describe text or page
