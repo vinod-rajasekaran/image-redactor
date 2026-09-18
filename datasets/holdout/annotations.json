@@ -1,7 +1,7 @@
 {
   "_meta": {
-    "description": "11 synthetic Indian documents held out as a test set: an Aadhaar card, a community-services ID card, and nine everyday forms, bills, invoices and labels. 71 PII items, 9 of them sensitive-tier.",
-    "source": "OpenAI image generation, prompted by the repository owner, 2026-09-18",
+    "description": "21 synthetic Indian documents held out as a test set: two ID cards, an Aadhaar card, and eighteen everyday forms, bills, invoices, letters, receipts and labels. 118 PII items, 14 of them sensitive-tier.",
+    "source": "OpenAI image generation, prompted by the repository owner — 11 pages 2026-09-18, 10 more added 2026-09-19",
     "licence": "Fully synthetic — every name, number, address and face is fabricated; no real person and no real document. OpenAI assigns output rights to the user; purely AI-generated output generally cannot be copyrighted for want of human authorship, so nothing restricts redistribution. The repository's MIT licence covers the human-directed selection, curation and annotation. Same status as datasets/documents/, which is likewise entirely AI-generated (01-10 by a Claude-written renderer, 11-20 by an OpenAI image model). See SOURCES.md.",
     "annotation": "text (legibility scoring); no boxes — see note_no_boxes",
     "held_out": true,
@@ -11,7 +11,9 @@
     "note_no_boxes": "No box coordinates. The only way to produce them for these images is a vision pass, and per-region coverage from vision boxes was built, measured and removed here because those boxes sit about a text row off. Text-only, like datasets/documents/.",
     "note_resolution": "Images 03-11 are roughly 471x363, so character heights are small and the upscale-by-character-height path carries most of the load. A low score on those pages may be measuring resolution rather than detection. Images 01 and 02 are full resolution (1536x1024 and 1427x1102).",
     "note_watermarks": "Every page except 01 carries a printed 'SYNTHETIC TEST DOCUMENT' watermark, which is real ink on the page and will be OCR'd as text.",
-    "note_filenames": "Filenames carry an 'h' prefix so they cannot collide with another corpus's. They did: holdout's 01_aadhaar_card.png matched documents' exactly, and a score run without REDACTOR_CORPUS=holdout silently graded that one page against the wrong ground truth and reported '4 redacted, 1 leaked' as if it were a whole-corpus result. A prefix turns that silent half-success into an obvious zero-match."
+    "note_filenames": "Filenames carry an 'h' prefix so they cannot collide with another corpus's. They did: holdout's 01_aadhaar_card.png matched documents' exactly, and a score run without REDACTOR_CORPUS=holdout silently graded that one page against the wrong ground truth and reported '4 redacted, 1 leaked' as if it were a whole-corpus result. A prefix turns that silent half-success into an obvious zero-match.",
+    "corpus_revision": "2026-09-19: grew from 11 images / 71 items to 21 / 118. Scores before and after that change are NOT comparable — the denominator moved, not the pipeline. The two earlier holdout entries in benchmarks/history.jsonl (78.9% and 77.5%, both on 11 images) belong to the smaller corpus. The report refuses to draw a delta across a change in image count.",
+    "note_visual": "The 2026-09-19 additions were chosen partly to fix a measurement gap: QR ground truth went from 4 regions to 9, which is why the detector's QR precision and recall can now be read with something better than four true positives behind them."
   },
   "h01_aadhaar_card.png": {
     "source": "synthetic",
@@ -594,5 +596,428 @@
       "barcode": 0
     },
     "notes": "EduFuture student registration form with a QR code. The parent's signature is an illegible squiggle carrying no readable text, so it is not annotated as a PII item; it still ought to be covered."
+  },
+  "h12_citizen_id_card.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_11.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Arjun Mehta"
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "14/08/1992"
+      },
+      {
+        "field": "ID Number",
+        "expected_type": null,
+        "tier": "core",
+        "text": "SYNT123456789",
+        "note": "No published spec; a labels.py case."
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "12 Green Park Avenue, Indiranagar, Bengaluru - 560038, Karnataka, India"
+      },
+      {
+        "field": "Signature (handwritten)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Arjun Mehta"
+      }
+    ],
+    "visual": {
+      "face": 1,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Same person as h02_community_services_id_card.png — same name, DOB and address on two different document types. Cross-document linkage is a real re-identification route and nothing here measures it."
+  },
+  "h13_boarding_pass.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_12.png",
+    "pii": [
+      {
+        "field": "Passenger Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Kavya Reddy"
+      },
+      {
+        "field": "PNR",
+        "expected_type": null,
+        "tier": "core",
+        "text": "7H3K9L",
+        "note": "The PNR recognizer was one of seven removed in September 2026 for encoding an invented shape. A six-character alphanumeric beside a PNR label: a labels.py case by construction."
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 1
+    },
+    "notes": "Airline boarding pass. The code block is a dense 2-D symbology printed between 1-D guard bars; annotated as barcode, which is the closest of the three kinds this schema carries."
+  },
+  "h14_lab_report.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_13.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Priya Sharma"
+      },
+      {
+        "field": "Patient ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "LC202400987"
+      },
+      {
+        "field": "Result (abnormal)",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "11.8 g/dL",
+        "note": "Haemoglobin, below the 12.0-15.0 reference range printed beside it."
+      },
+      {
+        "field": "Result (abnormal)",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "22 ng/mL",
+        "note": "Vitamin D, flagged L on the page against a 30-100 range."
+      },
+      {
+        "field": "Reporting pathologist",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Dr. Neha Kulkarni"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Only the two out-of-range results are annotated, not all six: an in-range value is a weaker health disclosure and a legibility verdict on '96 mg/dL' would be hard to read as a privacy failure. A person may well disagree and annotate all six."
+  },
+  "h15_water_bill.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_14.png",
+    "pii": [
+      {
+        "field": "Customer Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Ramesh Iyer"
+      },
+      {
+        "field": "Customer ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "MWS6789012"
+      },
+      {
+        "field": "Service Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "78 Lake View Road, Whitefield, Bengaluru - 560066"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "The QR is labelled 'Scan to pay', so it plausibly encodes the account."
+  },
+  "h16_school_admission_letter.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_15.png",
+    "pii": [
+      {
+        "field": "Child's name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Ananya Gupta",
+        "note": "Born 2013 — a minor."
+      },
+      {
+        "field": "Child's date of birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "17/09/2013"
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 43210"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "neha.gupta@example.com"
+      },
+      {
+        "field": "Signature (handwritten)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Neha Gupta"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Handwritten PROSE on ruled paper, not a form. Every value sits inside a sentence with no label beside it, so labels.py has nothing to anchor to and the whole page rests on NER over handwriting. The hardest page in the corpus for that reason."
+  },
+  "h17_hotel_receipt.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_16.png",
+    "pii": [
+      {
+        "field": "Guest Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Vikram Sinha"
+      },
+      {
+        "field": "Room No",
+        "expected_type": null,
+        "tier": "core",
+        "text": "407",
+        "note": "A room number with a dated stay is a weak identifier on its own and a strong one beside the guest name. Annotated; a person may disagree."
+      },
+      {
+        "field": "Payment card (masked)",
+        "expected_type": null,
+        "tier": "core",
+        "text": "****1234",
+        "note": "Already masked to the last four on the page. Whether a masked PAN still needs covering is a policy call, not a detection one."
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Hotel guest receipt."
+  },
+  "h18_doctor_prescription.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_17.png",
+    "pii": [
+      {
+        "field": "Patient Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Sameer Ali"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Metformin 500 mg"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Atorvastatin 10 mg"
+      },
+      {
+        "field": "Medication",
+        "expected_type": null,
+        "tier": "sensitive",
+        "text": "Vitamin D3 60,000 IU"
+      },
+      {
+        "field": "Prescriber",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Dr. Kavita Rao"
+      },
+      {
+        "field": "Medical Registration No.",
+        "expected_type": null,
+        "tier": "core",
+        "text": "SYN98765"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "Handwritten drug lines. Vitamin D3 60,000 IU is the exact item documents/17 annotates as the --protect-clinical boundary case."
+  },
+  "h19_shipping_label.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_18.png",
+    "pii": [
+      {
+        "field": "From (organisation)",
+        "expected_type": "ORGANIZATION",
+        "tier": "core",
+        "text": "Aarav Enterprises"
+      },
+      {
+        "field": "From (address)",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "12 Industrial Area, Bengaluru - 560058"
+      },
+      {
+        "field": "From (phone)",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 11122"
+      },
+      {
+        "field": "To (name)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Sneha Kulkarni"
+      },
+      {
+        "field": "To (address)",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "45, Church Road, Pune - 411001"
+      },
+      {
+        "field": "To (phone)",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "91234 56789"
+      },
+      {
+        "field": "Tracking number",
+        "expected_type": null,
+        "tier": "core",
+        "text": "QS789456123IN",
+        "note": "Printed under the barcode AND encoded in it; covering one does not cover the other."
+      },
+      {
+        "field": "Order ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "#AQ98765"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 1
+    },
+    "notes": "The only page in the corpus carrying BOTH a barcode and a QR code, and the recipient is the same Sneha Kulkarni as h10_shipping_label.png."
+  },
+  "h20_loan_application.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_19.png",
+    "pii": [
+      {
+        "field": "Name",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Divya Nair"
+      },
+      {
+        "field": "Date of Birth",
+        "expected_type": "DATE_TIME",
+        "tier": "core",
+        "text": "03 / 11 / 1988"
+      },
+      {
+        "field": "PAN",
+        "expected_type": "IN_PAN",
+        "tier": "core",
+        "text": "SYNPN1234K",
+        "note": "Matches the published PAN shape exactly (5 letters, 4 digits, 1 letter), so IN_PAN should fire. Handwritten, which is the test."
+      },
+      {
+        "field": "Aadhaar No",
+        "expected_type": "IN_AADHAAR",
+        "tier": "core",
+        "text": "1234 5678 9012",
+        "note": "Verhoeff checksum FAILS (verified). Third canary for the OCR-tolerant fallback, and the first one that is HANDWRITTEN."
+      },
+      {
+        "field": "Phone",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "98765 67890"
+      },
+      {
+        "field": "Email",
+        "expected_type": "EMAIL_ADDRESS",
+        "tier": "core",
+        "text": "divya.nair@example.com"
+      },
+      {
+        "field": "Address",
+        "expected_type": "LOCATION",
+        "tier": "core",
+        "text": "90 Palm Avenue, Kochi - 682018"
+      },
+      {
+        "field": "Signature (handwritten)",
+        "expected_type": "PERSON",
+        "tier": "core",
+        "text": "Divya Nair"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    },
+    "notes": "The densest identifier page in the corpus: PAN and Aadhaar together, both handwritten. Kochi is the only Kerala address here."
+  },
+  "h21_cafe_receipt.png": {
+    "source": "synthetic",
+    "labelled_by": "claude-draft-pending-human-audit",
+    "source_file": "synthetic_document_20.png",
+    "pii": [
+      {
+        "field": "UPI payer number",
+        "expected_type": "PHONE_NUMBER",
+        "tier": "core",
+        "text": "9876543210",
+        "note": "A bare 10-digit mobile printed as the UPI handle."
+      },
+      {
+        "field": "Transaction ID",
+        "expected_type": null,
+        "tier": "core",
+        "text": "UPI123456789"
+      }
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 1,
+      "barcode": 0
+    },
+    "notes": "Coffee-shop bill, coffee-stained and creased. Bill number, table and line items are not personal and are not annotated."
   }
 }

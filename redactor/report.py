@@ -356,6 +356,19 @@ def _delta_line(hist: list[dict]) -> str:
     if len(hist) < 2:
         return "<p class='note'>First scored run for this corpus — no trend yet.</p>"
     prev, cur = hist[-2], hist[-1]
+
+    # A corpus that grew is a different corpus. Comparing a percentage across
+    # a change in item count reads as a regression or an improvement when
+    # nothing about the pipeline moved — the denominator did. Say so and
+    # refuse the comparison rather than draw a line through it.
+    if prev.get("image_count") != cur.get("image_count"):
+        return (
+            f"<p class='note'><b>No comparison: the corpus changed size.</b> "
+            f"The previous run scored {prev.get('image_count')} image(s) and "
+            f"this one {cur.get('image_count')}. A percentage across a changed "
+            f"denominator is not a trend, and the line above spans both — read "
+            f"points before and after the change separately.</p>"
+        )
     d = (cur["recall_floor_pct"] or 0) - (prev["recall_floor_pct"] or 0)
     word = "unchanged from" if abs(d) < 0.05 else (
         f"{'up' if d > 0 else 'down'} {abs(d):.1f} points from")
@@ -697,6 +710,85 @@ def _element_table(legibility: dict) -> str:
     )
 
 
+def visual_panel(corpus_names: list[str]) -> str:
+    """Detector precision and recall for faces, QR codes and barcodes.
+
+    Read from `runs/visual_audit.json`, the proposal `audit_visual.py` writes
+    from the unredacted originals. Reported separately from the item totals
+    and labelled as model-proposed, because it is: the ground truth here was
+    not independently authored, and the counts are small enough that one
+    region moves a figure by ten points or more.
+    """
+    path = ROOT / "runs" / "visual_audit.json"
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return ""
+
+    kinds = ("face", "qr_code", "barcode")
+    agg = {k: {"tp": 0, "fp": 0, "fn": 0} for k in kinds}
+    misses, extras = [], []
+    for corpus, pages in data.items():
+        if corpus.startswith("_") or corpus not in corpus_names:
+            continue
+        for name, v in sorted(pages.items()):
+            for k in kinds:
+                t, g = v["proposed"][k], v["detected"][k]
+                agg[k]["tp"] += min(t, g)
+                agg[k]["fp"] += max(0, g - t)
+                agg[k]["fn"] += max(0, t - g)
+                if t > g:
+                    misses.append((corpus, name, k))
+                if g > t:
+                    extras.append((corpus, name, k))
+    if not any(sum(v.values()) for v in agg.values()):
+        return ""
+
+    rows = ""
+    for k in kinds:
+        a = agg[k]
+        if not any(a.values()):
+            continue
+        prec = a["tp"] / (a["tp"] + a["fp"]) if a["tp"] + a["fp"] else None
+        rec = a["tp"] / (a["tp"] + a["fn"]) if a["tp"] + a["fn"] else None
+        weak = " class='bad'" if (rec is not None and rec < 0.9) or (
+            prec is not None and prec < 0.9) else ""
+        rows += (
+            f"<tr><td{weak}>{html.escape(k)}</td>"
+            f"<td class='n'>{a['tp']}</td>"
+            f"<td class='n dim'>{a['fp']}</td>"
+            f"<td class='n bad'>{a['fn']}</td>"
+            f"<td class='n'>{f'{prec:.0%}' if prec is not None else '—'}</td>"
+            f"<td class='n'>{f'{rec:.0%}' if rec is not None else '—'}</td></tr>"
+        )
+
+    def listed(pairs, verb):
+        if not pairs:
+            return ""
+        items = ", ".join(
+            f"<code>{html.escape(n)}</code> ({html.escape(k)})" for _c, n, k in pairs
+        )
+        return f"<p class='note'><b>{verb}:</b> {items}</p>"
+
+    return (
+        "<h2>Visual detection — faces, QR codes, barcodes</h2>"
+        "<div class='scroll'><table><thead><tr><th>kind</th>"
+        "<th class='n'>found</th><th class='n'>false positives</th>"
+        "<th class='n'>missed</th><th class='n'>precision</th>"
+        "<th class='n'>recall</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+        + listed(misses, "Missed")
+        + listed(extras, "Reported where the page has none")
+        + "<p class='note'><b>Weaker evidence than the text figures.</b> The "
+        "ground truth is proposed by a vision model reading the unredacted "
+        "originals and has not been independently authored, and the counts are "
+        "small — one region is ten points or more. Visual regions are scored "
+        "here only; they are deliberately absent from the item totals above, "
+        "so no published recall figure includes them.</p>"
+    )
+
 def render_combined(run_dir: Path, panels: list[dict]) -> str:
     """One page per run, a tab per corpus.
 
@@ -786,6 +878,8 @@ low.</p>
 
 <div class="tabs">{''.join(tabs)}</div>
 {''.join(bodies)}
+
+{visual_panel([p['name'] for p in panels])}
 
 <footer>
   <p>Each corpus is a complete run folder under this one —

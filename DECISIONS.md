@@ -3312,3 +3312,99 @@ QR number.
 
 **Provenance is recorded in the corpus `_meta`**, including that the counts
 are model-proposed and detector-confirmed rather than independently authored.
+
+---
+
+## 2026-09-19 — `holdout/` grows to 21 pages, and QR detection finally has a sample
+
+Ten pages added, chosen partly to fix a measurement gap: **QR ground truth
+went from 4 regions to 9**, which is why the detector's QR figures can now be
+read with something better than four true positives behind them.
+
+`holdout/` is now 21 images and 118 items, 14 sensitive-tier. The new pages
+add a boarding pass, lab report, water bill, handwritten school-admission
+letter, hotel receipt, prescription, shipping label, loan application, cafe
+receipt and a second ID card.
+
+**The corpus changed size, so scores across the change are not comparable.**
+The two earlier holdout entries — 78.9% and 77.5%, both on 11 images — belong
+to the smaller corpus. `_delta_line` now refuses to compute a delta when
+`image_count` differs between runs and says why: a percentage across a moved
+denominator is not a trend. The sparkline still spans both points, and the
+text tells the reader to read them separately.
+
+### Suite results, `runs/suite-2`
+
+| corpus | covered | leaked | | note |
+|---|---:|---:|---:|---|
+| `documents/` | 71 | 6 | 92.2% | ceiling of the known band again |
+| `cheques/` | 46 | 14 | 76.7% | up from 73.3% with no pipeline change |
+| `holdout/` | 89 | 29 | 75.4% | new corpus — not comparable with 77.5% |
+
+`cheques/` moving 73.3% → 76.7% on two elements, with nothing in the pipeline
+changed, is the vision scorer's own disagreement. That corpus is scored by
+asking a model per element, so it has a band like the others; this is the
+first time it has been observed, and it means a two-element cheque difference
+is noise.
+
+### QR detection: 75% precision, 82% recall — and the misses are two different bugs
+
+| kind | found | false positives | missed | precision | recall |
+|---|---:|---:|---:|---:|---:|
+| face | 6 | 0 | 0 | **100%** | **100%** |
+| barcode | 7 | 0 | 1 | **100%** | **88%** |
+| qr_code | 9 | 3 | 2 | **75%** | **82%** |
+
+Up from 57% / 67% on the smaller sample. **All five QR codes on the new pages
+were detected**; the two misses are still `h01_aadhaar_card.png` and
+`h08_retail_invoice.png`. The new barcode miss is `h13_boarding_pass.png`,
+whose code is a dense 2-D symbology printed between 1-D guard bars.
+
+**`cv2.QRCodeDetector.detectMulti` failed on all eleven real QR codes.**
+Every detection in this project comes from the `detect()` single-code
+fallback. `detectMulti` is contributing nothing on this data and is worth
+either dropping or understanding.
+
+**Size is not the discriminator, which was the obvious hypothesis and is
+wrong.** `h01`'s QR is 319px — the *largest* in the whole set, 20.8% of its
+page width — and it is missed, while `h02`'s 138px at 9.7% is found. `h08`'s
+59px is the same size as `h11`'s 61px, and one is found and the other is not.
+
+The two misses are two distinct failures:
+
+- **`h01` is a contrast failure.** Its QR sits on the Aadhaar guilloche
+  security pattern. At native scale, Otsu binarisation or a 3x3 blur both
+  rescue it; upscaling rescues it only at exactly 2x.
+- **`h08` is a module-resolution failure.** Small *and* dense, so each module
+  is around a pixel. No preprocessing at 1x rescues it; only upscaling to
+  2.5x or beyond does.
+
+That is why no single preprocessing path fixed both, which was the reason the
+detector was left alone yesterday.
+
+### A cascade would reach 100% recall, at a precision cost — and is NOT adopted
+
+Trying raw, then Otsu, then 2.5x, first hit wins:
+
+| | found | false positives | missed | precision | recall |
+|---|---:|---:|---:|---:|---:|
+| shipped today | 9 | 3 | 2 | 75% | 82% |
+| raw → Otsu → 2.5x | 11 | 5 | 0 | **69%** | **100%** |
+
+It covers both misses and adds two false positives
+(`documents/05_doctor_prescription.png` at 2.5x,
+`holdout/h05_electricity_bill.png` at Otsu).
+
+By this project's stated preference — recall over precision, since a missed
+Aadhaar QR encodes name, date of birth and address while a false positive
+blacks out a harmless patch — that is the right trade. **It is still not
+adopted, and the reason is the holdout rule.** Both misses are holdout pages,
+and the specific choices of *Otsu* and *2.5x* were picked by looking at what
+rescued them. That is choosing a parameter from the held-out corpus, which is
+exactly what `refuse_if_tuning()` exists to prevent a script from doing — and
+a person doing it by hand is the same act.
+
+**What would make it adoptable:** QR-bearing pages in `documents/` or
+`cheques/`, or a third-party corpus, that exhibit the same two failure modes.
+The precision cost is already measurable on the permitted corpora; it is the
+recall evidence that lives in the wrong place.

@@ -15,7 +15,7 @@ is where a script reads it from.
 | corpus | n | tracked | annotation | provenance | licence |
 |---|---:|---|---|---|---|
 | `documents/` | 20 | yes | text | 01–10 rendered by `generate_test_images.py`; 11–20 generated with an OpenAI image model, supplied as a collage and split | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
-| `holdout/` | 11 | yes | text | generated with an OpenAI image model, prompted by the repository owner | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
+| `holdout/` | 21 | yes | text | generated with an OpenAI image model, prompted by the repository owner | fully synthetic, freely redistributable — see [SOURCES.md](../SOURCES.md) |
 | `ktp/` | 20 | no | box + text | [`cloverx-id/indonesian-id-card-dummy`](https://huggingface.co/datasets/cloverx-id/indonesian-id-card-dummy), publisher-declared dummy data | CC-BY-4.0 |
 | `cheques/` | 10 | yes | box | [`jaganadhg/cheque-synthetic-images`](https://huggingface.co/datasets/jaganadhg/cheque-synthetic-images), publisher-declared synthetic | Apache-2.0 |
 | `text/` | 2 files, 2.2MB | no | spans | IndiaPII-Bench; maskara-indian-pii-200k | CC-BY-4.0; MIT |
@@ -56,9 +56,9 @@ Three things in it exist nowhere else here: a **Devanagari** name on an
 image, where the label lexicon's Devanagari terms have never been exercised;
 a **second checksum-invalid Aadhaar**, which only the OCR-tolerant fallback
 can cover; and a page carrying **two different people**, which any
-single-subject assumption gets wrong. Nine of its 11 images are about
-471×363, so character heights are small and the upscale-by-character-height
-path carries most of the load — a low score on those pages may be measuring
+single-subject assumption gets wrong. Most of its pages are small — nine at about 471×363 and ten at about
+277×547 — so character heights are low and the upscale-by-character-height
+path carries most of the load. A low score on those pages may be measuring
 resolution rather than detection.
 
 `ktp/` is **Indonesian**, and is here because the label-to-value geometry

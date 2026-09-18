@@ -56,81 +56,32 @@ with reality, and the scores split exactly along that line:
 the generator that made them was deleted with them, so that no later
 session could reach for it.
 
-### `holdout/` — first score, 2026-09-18
+### `holdout/` — 21 pages, 118 items, scored 2026-09-19
 
-`datasets/holdout/` is an 11-page, 71-item corpus generated with an OpenAI
-image model, prompted by the repository owner, and **held out: no OCR system
-may ever be tuned on it.** Scored twice, vision-scored, defaults — at
-`4b44f75` (`runs/holdout`) and at `e914d29` (`runs/suite-1/holdout`):
+`datasets/holdout/` is generated with an OpenAI image model, prompted by the
+repository owner, and **held out: no OCR system may ever be tuned on it.**
+Latest score, vision-scored, defaults, `runs/suite-2`: **75.4%** — 89 of 118
+covered, 29 still legible.
 
-| tier | redacted | leaked | floor |
-|---|---:|---:|---:|
-| core | 53 | 9 | **85.5%** |
-| sensitive | 3 | 6 | **33.3%** |
-| **all, ceiling** | 56 | 15 | 78.9% |
-| **all, floor** | **55** | **16** | **77.5%** |
+**Do not compare that with the 77.5% this file carried before.** The corpus
+grew from 11 images and 71 items to 21 and 118 on 2026-09-19. The denominator
+moved, not the pipeline, and the report now refuses to draw a delta across a
+change in image count. Earlier figures (56/71 and 55/71) belong to the smaller
+corpus and are kept in `DECISIONS.md`, not here.
 
-**Publish 77.5%.** The corpus has now been scored at two commits — `4b44f75`
-and `e914d29` — and returned 56/71 then 55/71. **No detection code changed
-between them**: both intervening commits touched reporting and documentation
-only. So this is the scorer's own band, the same 0–1 movement `documents/`
-shows, landing on partially covered values. The band is **55–56 of 71** and
-the floor is what this file states.
+Scored at **3 distinct commits**. That count, not the recall, is the number
+that says whether the corpus is being used as a target.
 
-**77.5% against 90.9% on `documents/` is the point of the corpus, not a
-regression.** Both are this project's own images; the difference is that the
-recognizers were written while looking at one of them and have never seen the
-other. Read the 13-point gap as the cost of familiarity in the `documents/`
-figure.
+**75.4% against 92.2% on `documents/` is the point of the corpus, not a
+regression.** Both are this project's own images; the recognizers were written
+while looking at one and have never seen the other. Read the gap as the cost
+of familiarity in the `documents/` figure.
 
-Where the items went:
-
-| expected type | redacted | leaked |
-|---|---:|---:|
-| (no recognizer) | 10 | **9** |
-| PERSON | 17 | 3 |
-| LOCATION | 7 | 3 |
-| PHONE_NUMBER | 10 | 0 |
-| EMAIL_ADDRESS | 6 | 0 |
-| DATE_TIME | 5 | 0 |
-| IN_AADHAAR | 1 | 0 |
-
-Three things that matter more than the headline:
-
-- **The checksum-invalid Aadhaar was covered.** `4123 5687 9012` fails
-  Verhoeff, so `IN_AADHAAR` discards it and only the OCR-tolerant fallback
-  can reach it. It did. That fallback now has a second canary that is not
-  `documents/04_hospital_admission_report.png`.
-- **Nine of the fifteen leaks have no recognizer behind them** — account
-  numbers, customer and employee IDs, invoice and transaction numbers, a
-  tracking number. These are label problems, not pattern ones, exactly as
-  `labels.py` exists to address, and they are the largest single block of
-  failure here.
-- **The Devanagari name leaked**, as the README's "English only" limitation
-  predicts. This is the first time that limitation has been *measured* on an
-  image rather than asserted.
-
-The sensitive tier is 3 of 9 with `--medical-ner` off, which is the
-documented default.
-
-It sits in the "produced by this project" half of the table above, and
-holding it out does not move it across. The repository owner generated it,
-so it shares `documents/`'s standing — a ceiling on familiar material, not
-independent evidence. What it adds is narrower and real: **a number nothing
-here was fitted to.** Every other self-produced figure in this project was
-measured on images that were available while the recognizers were being
-written; this one will not be.
-
-Read its score with two things in mind. Nine of its 11 pages are about
-471×363, so a miss there may be measuring resolution rather than detection.
-And three of its cases exist nowhere else in this project's images — a
-Devanagari name, a second checksum-invalid Aadhaar, and two people on one
-page — so a low score may be the corpus reaching past what has ever been
-measured rather than a regression.
-
----
-
-## What is actually measured
+What the corpus reaches that nothing else here does: a **Devanagari** name,
+**three checksum-invalid Aadhaars** — one of them handwritten — **two people
+on one page**, a page carrying **both a barcode and a QR code**, handwritten
+prose with no labels to anchor to, and the same person appearing on two
+different document types.
 
 ### Visual PII — measured from 2026-09-18, and reported separately
 
@@ -140,26 +91,34 @@ legibility by `vision_score.py` and reported as their own block, outside the
 item totals, so no published headline moved when the measurement arrived.
 
 Detector precision and recall against a vision-proposed ground truth
-(`audit_visual.py`, 41 images across `documents/`, `cheques/` and
+(`audit_visual.py`, 51 images across `documents/`, `cheques/` and
 `holdout/`):
 
 | kind | true positives | false positives | missed | precision | recall |
 |---|---:|---:|---:|---:|---:|
-| face | 5 | 0 | 0 | **100%** | **100%** |
-| barcode | 6 | 0 | 0 | **100%** | **100%** |
-| qr_code | 4 | 3 | 2 | **57%** | **67%** |
+| face | 6 | 0 | 0 | **100%** | **100%** |
+| barcode | 7 | 0 | 1 | **100%** | **88%** |
+| qr_code | 9 | 3 | 2 | **75%** | **82%** |
 
 **Trust this less than the text figures, for two reasons.** The ground truth
 is model-proposed and human-unconfirmed — `runs/visual_audit.json` holds the
 proposal and no corpus has been changed to match it. And the counts are tiny:
 one QR is fourteen points of recall.
 
-**QR is the only weak visual detector and it fails both ways** — two false
-positives on `documents/`, one on `cheques/`, two misses on `holdout/`. No
-fix has been made, because no single preprocessing path wins on both corpora;
-see `DECISIONS.md` for the measured comparison.
+**QR is the weakest visual detector and it fails both ways** — three false
+positives, two misses. The two misses are two different bugs: `h01` is a
+contrast failure (its QR sits on the Aadhaar guilloche; Otsu rescues it at
+native scale) and `h08` is a module-resolution failure (only upscaling past
+2.5x rescues it). Size is not the discriminator — `h01` carries the largest
+QR in the set.
 
-Known annotation gap: `cheques/` has three real barcodes annotated nowhere.
+`cv2.QRCodeDetector.detectMulti` found **none of the eleven** real QR codes;
+every detection comes from the `detect()` fallback.
+
+A raw → Otsu → 2.5x cascade reaches **100% recall at 69% precision**. It is
+**not adopted**: both misses are holdout pages and the choice of Otsu and 2.5x
+was made by looking at what rescued them, which is choosing a parameter from
+the held-out corpus. See `DECISIONS.md`.
 
 ### Independent evidence
 
