@@ -285,18 +285,39 @@ def legibility(run_dir: Path) -> None:
         return {e["element"]: e["state"] for e in json.loads(text)["elements"]}
 
     tally = collections.defaultdict(lambda: {"covered": 0, "leaked": 0})
+    per_image: dict[str, dict] = {}
     for name, path, _ in corpus.items():
         redacted = images / name
         if not redacted.exists():
             continue
         before, after = read(path), read(redacted)
+        leaked, covered, skipped = [], [], []
         for element, state_before in before.items():
             if state_before != "readable":
+                skipped.append(element)
                 continue        # never legible: not ours to claim either way
             if after.get(element) == "readable":
                 tally[element]["leaked"] += 1
+                leaked.append(element)
             else:
                 tally[element]["covered"] += 1
+                covered.append(element)
+        per_image[name] = {
+            "leaked": sorted(leaked),
+            "covered": sorted(covered),
+            "not_legible_before": sorted(skipped),
+        }
+
+    # Persisted, because a measurement that exists only in a terminal cannot
+    # be checked later, and this one takes two vision passes per image to
+    # reproduce. The aggregate is what gets quoted; the per-image detail is
+    # what makes a quoted number auditable.
+    out = run_dir / "legibility.json"
+    out.write_text(json.dumps(
+        {"run": run_dir.name, "by_element": dict(tally), "by_image": per_image},
+        indent=2,
+    ))
+    console.print(f"[green]Legibility detail written to[/green] {out}")
 
     table = Table(title=f"Cheque legibility — {run_dir}")
     table.add_column("element", style="cyan")

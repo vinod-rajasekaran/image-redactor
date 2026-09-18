@@ -253,7 +253,8 @@ def test_history_marks_held_out() -> bool:
             ))
             ok.append(check(
                 "trend is drawn in the warning colour, not the accent",
-                "var(--warn)" in page2 and 'stroke="var(--accent)"' not in page2,
+                'stroke="var(--held)"' in page2
+                and 'stroke="var(--covered)"' not in page2,
             ))
 
             # A corpus that is not held out gets neither banner nor warning.

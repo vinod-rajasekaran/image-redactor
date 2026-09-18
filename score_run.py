@@ -272,7 +272,9 @@ def main() -> None:
             f"confirmation {times}, not a target. Nothing may be chosen from "
             f"this number.[/yellow]"
         )
-    path = report.write(run_dir, score, corpus.name, held_out=held_out)
+    path = report.write(
+        run_dir, score, corpus.name, held_out=held_out, corpus=corpus
+    )
     console.print(f"[green]Report written to[/green] {path}")
     if "--no-open" not in sys.argv and report.open_in_browser(path):
         console.print("[dim]opened in your browser[/dim]")

@@ -171,10 +171,20 @@ a clone alone; the third-party corpora under `text/` and `ktp/` are fetched
 on demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
 
-Every scored run writes a self-contained `runs/<name>/report.html` and
-opens it: the headline, the tier and entity breakdowns, a trend across
-previous runs of the same corpus, and the commit each past number came from.
-Pass `--no-open` to write it without opening a browser. The trend reads
+Every scored run writes a `runs/<name>/report.html` and opens it. It leads
+with the **failures** — every item still legible, each beside the page it is
+on, with filters for the sensitive tier and for identifiers no recognizer
+covers. The images come from `annotate_leaks.py` where one exists, so the
+boxes mark what the scorer flagged; they are read from the run folder by
+relative path, so the page works offline and moves with the run. Below that:
+the tier and entity breakdowns, a trend across previous runs of the same
+corpus, and the commit each past number came from. Pass `--no-open` to write
+it without opening a browser.
+
+Corpora annotated with boxes rather than text — `cheques/` — have no
+per-value verdicts, so their failures come from `legibility.json`, which
+`cheque_benchmark.py --legibility` writes, and name the *element* that stayed
+readable rather than the value. The trend reads
 `benchmarks/history.jsonl`, which is **committed**, so a trend reproduces
 from a clone the way the corpus figures do — one line per scored run,
 carrying the recall, the totals by tier, the config that produced them and

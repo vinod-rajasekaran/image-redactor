@@ -2978,3 +2978,65 @@ of it. Tests use a temporary history file, so running them never writes to
 the committed one.
 
 **Current count: `holdout/` scored once, at `4b44f75`, 78.9%.**
+
+---
+
+## 2026-09-18 — The run report leads with failures, and shows the page
+
+The first version of `runs/<name>/report.html` was a headline, two tables
+and a trend. It was reviewed and the verdict was fair: a number and a
+breakdown do not tell you what went wrong, and the corpus you can act on is
+the one you can see. It now leads with **every item still legible, each
+beside the page it is on**, with filters for the sensitive tier and for
+identifiers no recognizer covers.
+
+Images are read from the run folder by **relative path** — `scored/<name>`
+where `annotate_leaks.py` has drawn the failures, `images/<name>` otherwise.
+That keeps the page self-contained and offline: it moves with the run, and
+copying a run folder copies a working report. It is also why this stayed a
+local file rather than becoming a published page, which cannot reference
+anything on disk.
+
+### Two annotation shapes, one report
+
+`documents/` and `holdout/` carry ground-truth text, so
+`vision_verdicts.json` gives a verdict per *value* and a failure can name
+what leaked. `cheques/` carries boxes and no text, so legibility is asked per
+*element* and a failure names `micr` or `payee_name` rather than a value.
+`report.failures()` reads whichever exists and returns the same shape, so the
+renderer does not branch.
+
+### `cheque_benchmark.py --legibility` now persists what it measured
+
+It printed a table and kept nothing. That measurement costs **two vision
+passes per image** — the original and the redacted output, because an element
+that was never legible cannot be counted as a redaction success — and it was
+being thrown away at the end of every run. It now writes `legibility.json`
+with per-image detail alongside the aggregate. The aggregate is what gets
+quoted; the per-image detail is what makes a quoted number auditable, and it
+is what the report's failure list reads.
+
+Reproduced on a second pass, unchanged: payee 80%, account 70%, signature
+90%, IFSC 100%, amount 60%, MICR 40%. **MICR at 4 of 10 is the worst element
+measured anywhere in this project.**
+
+### Scores from this pass, and one that is not an improvement
+
+| corpus | this run | note |
+|---|---|---|
+| `documents/` | 92.2% (71/77), core 97%, sensitive 20% | **ceiling of the known band, not a gain** |
+| `cheques/` | 73.3% of elements (44/60) | independent; handwriting throughout |
+| `holdout/` | 78.9% (56/71) | confirmation 1 |
+
+**`documents/` at 92.2% must not be read as an improvement.** The published
+headline is the *floor* of a 69–70 band the scorer moves on partially covered
+values; this run landed on 70/72 core where the floor is 69/72. Nothing in
+the pipeline changed between them. The published figures stand: **95.8% core,
+90.9% overall.**
+
+One incidental confirmation: `14_passport.png` is absent from the documents
+verdict list because it is a closed passport cover annotated with **zero**
+items and the note "any detection here is a false positive". The pipeline
+detected none and copied it through. It is a false-positive control and it
+passed — worth stating, because an image missing from a score listing
+normally means a dropped page.
