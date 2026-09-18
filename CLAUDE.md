@@ -146,6 +146,15 @@ be killed; that is how it would happen in practice, as a default `--input`
 nobody changed. Add the guard call to any *new* script that chooses a
 parameter from a score.
 
+**The holdout scored-count in `benchmarks/history.jsonl` is the number to
+watch, not the recall.** Every scoring is recorded, held-out included, and
+the report states how many times the corpus has been scored and whether the
+current commit has scored it before. Nothing enforces this one: a person
+reading the trend and keeping the changes that move it up is hill-climbing
+on the test set, and no guard can see that happening. If the count is
+climbing, the corpus has become a target regardless of intent. Decide with
+`cheques/`, IndiaPII-Bench or maskara; come back here once, afterwards.
+
 Holding it out does **not** make it independent evidence — the owner
 generated it, so it shares `documents/`'s ceiling status. What it gives is a
 number nothing was fitted to. Evidence for a change still comes from

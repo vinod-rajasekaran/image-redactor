@@ -257,6 +257,26 @@ def main() -> None:
     )
     console.print(f"[green]Scores written to[/green] {score_path}")
 
+    # A report on every run, and the trend behind it. Held-out corpora get the
+    # page but never the history — see redactor/report.py for why that is a
+    # rule rather than a setting.
+    from redactor import report
+
+    score = json.loads(score_path.read_text())
+    held_out = bool(datasets._meta_of(corpus.name).get("held_out"))
+    report.record(score, corpus.name, held_out=held_out)
+    if held_out:
+        times = len(report.history_for(corpus.name))
+        console.print(
+            f"[yellow]{corpus.name} is held out. Recorded — this is "
+            f"confirmation {times}, not a target. Nothing may be chosen from "
+            f"this number.[/yellow]"
+        )
+    path = report.write(run_dir, score, corpus.name, held_out=held_out)
+    console.print(f"[green]Report written to[/green] {path}")
+    if "--no-open" not in sys.argv and report.open_in_browser(path):
+        console.print("[dim]opened in your browser[/dim]")
+
 
 if __name__ == "__main__":
     main()

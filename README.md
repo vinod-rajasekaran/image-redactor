@@ -156,7 +156,7 @@ python build_ground_truth.py            # -> datasets/documents/annotations.json
 python evaluate_redactor.py --input datasets/documents/images
 
 python vision_score.py runs/<name>      # ask Claude what survived
-python score_run.py runs/<name>         # the score
+python score_run.py runs/<name>         # the score, a report, and the trend
 python annotate_leaks.py runs/<name>    # draw the failures onto the images
 ```
 
@@ -170,6 +170,24 @@ person, document or account appears anywhere in this repo. `documents/`,
 a clone alone; the third-party corpora under `text/` and `ktp/` are fetched
 on demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
+
+Every scored run writes a self-contained `runs/<name>/report.html` and
+opens it: the headline, the tier and entity breakdowns, a trend across
+previous runs of the same corpus, and the commit each past number came from.
+Pass `--no-open` to write it without opening a browser. The trend reads
+`benchmarks/history.jsonl`, which is **committed**, so a trend reproduces
+from a clone the way the corpus figures do — one line per scored run,
+carrying the recall, the totals by tier, the config that produced them and
+the git SHA, with a marker when the tree was dirty.
+
+**Held-out corpora are recorded too, and marked wherever they appear.** A
+corpus with no visible history invites being scored quietly, and an
+unrecorded score is the one nobody can audit. So `holdout/` entries carry
+`held_out: true`, its trend is drawn in the warning colour rather than the
+accent, and its report states how many times it has been scored and whether
+the current commit has scored it before. That count is the signal to watch:
+a rising one means the corpus is being used as a target, which is tuning
+however slowly it happens.
 
 `datasets/holdout/` is a **held-out test set of 11 pages and 71 items, and
 no OCR system may ever be tuned on it** — not backend selection, not PSM,
@@ -779,7 +797,7 @@ redactor/            the package
 evaluate_redactor.py        the CLI
 generate_test_images.py     synthetic Indian documents (Pillow, flat)
 build_ground_truth.py       what PII each image contains
-score_run.py                leakage scoring
+score_run.py                leakage scoring, report, trend history
 vision_score.py             ask Claude what survived
 annotate_inputs.py          audit the ground truth
 annotate_leaks.py           draw failures onto the images
@@ -790,6 +808,7 @@ benchmark_labels.py         label lexicon vs IndiaPII-Bench forms
 cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
 compare_runs.py             diff two scored runs: marginal catch vs cost
+redactor/report.py          per-run HTML report and benchmarks/history.jsonl
 test_labels.py              label geometry, hand-built OCR
 test_geometry_invariance.py does a spatial constant describe text or page
 test_clinical.py            what clinical protection will not withdraw

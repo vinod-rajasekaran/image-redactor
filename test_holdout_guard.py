@@ -205,8 +205,71 @@ def test_benchmark_ocr_refuses() -> bool:
     )
 
 
+def test_history_marks_held_out() -> bool:
+    """A held-out run is recorded, and marked everywhere a reader could look.
+
+    Leaving it out of the history was the other option and was rejected: a
+    corpus with no visible record invites being scored quietly. Recording it
+    only helps if every appearance says what it is, so what is pinned here is
+    the marking — the flag in the data, the banner on the page, the warning
+    colour on the trend, and the repeat-commit warning.
+    """
+    import tempfile
+    from redactor import report
+
+    score = {
+        "run_name": "t", "recall_floor_pct": 80.0, "recall_ceiling_pct": 80.0,
+        "config": {"image_count": 11, "ocr_backend": "tesseract"},
+        "totals": {"redacted": 56, "leaked": 15, "unverifiable": 0},
+        "by_tier": {"core": {"redacted": 53, "leaked": 9, "unverifiable": 0}},
+    }
+    original = report.HISTORY
+    ok = []
+    with tempfile.TemporaryDirectory() as tmp:
+        report.HISTORY = Path(tmp) / "history.jsonl"
+        try:
+            entry = report.record(score, HELD_OUT, held_out=True)
+            ok.append(check("held-out run IS recorded", report.HISTORY.exists()))
+            ok.append(check("entry carries held_out: true", entry.get("held_out") is True))
+            ok.append(check("entry carries the git sha", bool(entry["git"]["sha"])))
+
+            page = report.render(score, HELD_OUT, held_out=True)
+            ok.append(check(
+                "page says confirmation, not a target",
+                "confirmation, not a target" in page,
+            ))
+            ok.append(check("page shows the scored count", "Scored <b>1</b>" in page))
+            ok.append(check(
+                "page names the corpora that may decide a change",
+                "IndiaPII-Bench" in page and "cheques/" in page,
+            ))
+
+            # A second score at the same commit must say so.
+            report.record(score, HELD_OUT, held_out=True)
+            page2 = report.render(score, HELD_OUT, held_out=True)
+            ok.append(check(
+                "re-scoring one commit is called out",
+                "has now\nscored it 2 times" in page2 or "scored it 2 times" in page2,
+            ))
+            ok.append(check(
+                "trend is drawn in the warning colour, not the accent",
+                "var(--warn)" in page2 and 'stroke="var(--accent)"' not in page2,
+            ))
+
+            # A corpus that is not held out gets neither banner nor warning.
+            plain = report.render(score, NOT_HELD_OUT, held_out=False)
+            ok.append(check(
+                f"{NOT_HELD_OUT!r} page carries no held-out banner",
+                "confirmation, not a target" not in plain,
+            ))
+        finally:
+            report.HISTORY = original
+    return all(ok)
+
+
 TESTS = [
     ("corpus is marked held out", test_corpus_is_marked_held_out),
+    ("history marks held-out runs", test_history_marks_held_out),
     ("refuses tuning", test_refuses_tuning),
     ("allows everything else", test_allows_everything_else),
     ("scoring still works", test_scoring_still_works),

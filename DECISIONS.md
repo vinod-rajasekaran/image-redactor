@@ -2927,3 +2927,54 @@ up with `--medical-ner`; the nine label-shaped leaks would move with changes
 to `labels.py`. **Neither may be decided from these images.** If a change is
 made, the evidence comes from `cheques/`, IndiaPII-Bench or maskara, and this
 corpus gets re-scored afterwards to see what happened — once.
+
+---
+
+## 2026-09-18 — A report on every run, and a committed trend behind it
+
+`score_run.py` now writes a self-contained `runs/<name>/report.html` and
+opens it, and appends one line to `benchmarks/history.jsonl`. `--no-open`
+writes without launching a browser. The renderer lives in
+`redactor/report.py`, since the top-level files here are thin CLIs.
+
+The history is **committed**, for the same reason `documents/` and
+`cheques/` are: a trend that only exists in a gitignored `runs/` folder
+disappears on the next clean, and this project has already lost the working
+notes behind published figures that way. Each line carries the recall, the
+totals by tier, the config keys that change behaviour, and the **git SHA
+with a dirty-tree flag** — a performance history that cannot say which code
+produced a number is how a headline gets corrected six times.
+
+### Held-out corpora are recorded, not excluded — and the choice was close
+
+The first design left `holdout/` out of the history entirely, on the
+grounds that a trend line is a target. That was rejected after thinking
+about which failure it actually prevents.
+
+Excluding it prevents nobody from scoring the corpus; it only prevents the
+scoring from being **visible**. A corpus with no record invites being run
+quietly, and an unrecorded score is precisely the one that cannot be
+audited afterwards. Recording every scoring puts the pressure where it can
+do some good.
+
+So `holdout/` is tracked and marked at every point a reader could look:
+`held_out: true` in the data, a banner on the report, its trend drawn in the
+**warning colour** rather than the accent, and two counts — how many times
+the corpus has been scored in total, and whether **this commit has scored it
+before**. Re-scoring one commit is called out by name, because that is the
+shape of chasing a result until it reads the way you wanted.
+
+**None of this is a guard and it should not be mistaken for one.**
+`refuse_if_tuning()` stops a sweep. Nothing can stop a person reading a
+trend and keeping the changes that move it up — that is hill-climbing on the
+test set at human speed, and the only defence available is that it happens
+in the open with a counter attached. **The count is the thing to watch.** A
+rising one means the corpus has become a target, whatever anyone intended.
+
+`test_holdout_guard.py` pins the marking rather than the numbers: the flag
+in the recorded entry, the banner text, the warning colour on the trend, the
+repeat-commit warning, and that a corpus which is *not* held out gets none
+of it. Tests use a temporary history file, so running them never writes to
+the committed one.
+
+**Current count: `holdout/` scored once, at `4b44f75`, 78.9%.**
