@@ -167,6 +167,59 @@ def score_visual(client, model: str, image_path: Path) -> dict:
     return json.loads(next(b.text for b in response.content if b.type == "text"))
 
 
+def merge_verdicts(path: Path, fresh: dict, images_dir: Path) -> dict:
+    """Merge this pass into whatever is already on disk.
+
+    This file used to be overwritten with exactly what the current pass
+    scored, which made two ordinary situations silently destructive:
+    `--limit 3` replaced a twenty-image file with three, and an API error
+    part-way through produced a *shorter* file rather than a partial one.
+    `score_run.py` then fell back to OCR verdicts for the missing pages and
+    reported a whole-corpus number built mostly from the weaker scorer.
+
+    Merging fixes both. Pages scored this pass win; pages scored earlier
+    survive. Entries whose image is no longer in the run are dropped, so a
+    corpus change cannot leave stale verdicts behind, and the count is
+    reported either way — a file that shrinks should say so out loud.
+    """
+    try:
+        existing = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        existing = {}
+
+    def pages(d):
+        return {k: v for k, v in d.items() if not k.startswith("_")}
+
+    before = pages(existing)
+    kept = {k: v for k, v in before.items() if (images_dir / k).exists()}
+    stale = len(before) - len(kept)
+
+    out = {"_note": fresh.get("_note", existing.get("_note", ""))}
+    out.update(kept)
+    out.update(pages(fresh))
+
+    visual = dict(existing.get("_visual") or {})
+    visual = {k: v for k, v in visual.items() if (images_dir / k).exists()}
+    visual.update(fresh.get("_visual") or {})
+    if visual:
+        out["_visual"] = visual
+
+    added = len(pages(out)) - len(kept)
+    carried = len(kept) - len(pages(fresh) .keys() & kept.keys())
+    if carried > 0:
+        console.print(
+            f"[cyan]merged: {len(pages(fresh))} page(s) scored now, "
+            f"{carried} carried over from the previous file"
+            + (f", {stale} dropped (image no longer in the run)" if stale else "")
+            + "[/cyan]"
+        )
+    if len(pages(out)) < len(before):
+        console.print(
+            f"[yellow]the verdict file now holds {len(pages(out))} page(s), "
+            f"down from {len(before)} — check that is intended[/yellow]"
+        )
+    return out
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_dir")
@@ -267,7 +320,8 @@ def main() -> None:
         verdicts["_visual"] = visual
 
     out = run_dir / "vision_verdicts.json"
-    out.write_text(json.dumps(verdicts, indent=2, ensure_ascii=False))
+    merged = merge_verdicts(out, verdicts, images_dir)
+    out.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
     console.print(
         f"\n[bold]{totals['redacted']} redacted, {totals['leaked']} leaked[/bold]"
     )

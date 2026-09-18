@@ -3251,3 +3251,64 @@ and cost a full re-score. Still not fixed; now with a reproduction.
 
 **No published number changes in this entry.** Visual scoring is reported
 separately and the text totals are untouched.
+
+---
+
+## 2026-09-19 — Merge-on-write, and the cheque corpus gets its visual truth
+
+Two fixes, one of which is the same bug twice.
+
+### `vision_score.py` merges rather than overwrites
+
+The file was written with exactly what the current pass scored, which made
+two ordinary situations silently destructive: `--limit 3` replaced a
+20-image verdict file with three, and an API error part-way through produced
+a *shorter* file rather than a partial one. `score_run.py` then fell back to
+OCR verdicts for the missing pages and reported a whole-corpus number built
+mostly from the weaker scorer — the scorer this project switched away from
+precisely because it is blind where redaction fails.
+
+This was a known trap. `CLAUDE.md` has carried it since it was first noticed,
+with the suggested fix written down — "worth a merge-on-write, or at least a
+warning when the file shrinks" — and it sat there until it cost a full
+re-score during ordinary testing. **A documented trap is not a fixed trap.**
+
+Now: pages scored this pass win, earlier pages survive, entries whose image
+has left the run are dropped so a corpus change cannot leave stale verdicts,
+and the count carried over is printed. It still warns if the file shrinks.
+Verified by re-running `--limit 2` over a 19-page file: all 19 pages and all
+20 visual entries survived.
+
+### The same bug, written an hour later
+
+`audit_visual.py` — written earlier the same session — replaced
+`runs/visual_audit.json` wholesale, so `--corpus cheques` discarded the
+`documents` and `holdout` proposals. Identical shape, identical cause, and
+written **after** the first one was diagnosed.
+
+That is the useful part of this entry. The rule is not "remember that
+`vision_score.py` truncates"; it is **any script that writes a whole results
+file from a partial pass has this bug**, and `CLAUDE.md` now says so in those
+terms rather than naming one script.
+
+### `cheques/` had no visual ground truth at all
+
+Not wrong — absent. No entry carried a `visual` block, which is why
+`entry["visual"]` raised a `KeyError` the first time anything asked. Three
+real barcodes on `axis_syn_0001`, `axis_syn_0022` and `axis_syn_0027` were
+ground truth nowhere, so the barcode detector could not be scored on the only
+independent image corpus here.
+
+All ten entries now carry a block, from `audit_visual.py` reading the
+unredacted originals and agreeing with the detector on all three barcodes.
+No face or QR code is present on any cheque. The `qr_code` the detector
+reports on `syndicate_syn_0049` is the bank's dog logo — a confirmed false
+positive, and it stays annotated as absent.
+
+After the change, `cheques/` visual scoring is barcode **100% precision, 100%
+recall**, with the one standing QR false positive. The corpus-wide QR figures
+are unchanged at **57% precision, 67% recall**; adding the barcodes moved no
+QR number.
+
+**Provenance is recorded in the corpus `_meta`**, including that the counts
+are model-proposed and detector-confirmed rather than independently authored.

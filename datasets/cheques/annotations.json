@@ -6,7 +6,8 @@
     "provenance": "Published by jaganadhg on HuggingFace, declared fully synthetic — generated cheque layouts with fabricated account holders, no real account data. Images are not redistributed here; cheque_benchmark.py fetches them from the source.",
     "annotation": "box (coverage scoring); boxes are human-authored by the dataset's publishers, not by this project",
     "subset": "A 10-image slice of the published test split, chosen to keep every bank layout (axis 3, canara 3, icici 2, syndicate 2) and to retain syndicate_syn_0049, the image DECISIONS.md cites as the concrete cheque failure. Trimmed from 20 so the images could be tracked here: these are texture-heavy 2365x1065 PNGs that do not compress.",
-    "format": "JPEG q95, converted from the source PNGs. The boxes are pixel coordinates and the dimensions are unchanged, so the annotations carried over verbatim; the coverage figures were re-measured on the JPEGs rather than assumed to hold."
+    "format": "JPEG q95, converted from the source PNGs. The boxes are pixel coordinates and the dimensions are unchanged, so the annotations carried over verbatim; the coverage figures were re-measured on the JPEGs rather than assumed to hold.",
+    "visual_annotation": "Added 2026-09-19. The visual block was absent entirely until then, which meant three real barcodes on the axis cheques were ground truth nowhere and the QR/face/barcode detectors had nothing to be scored against on this corpus. Counts proposed by audit_visual.py reading the unredacted originals and confirmed against what the detector found: all three barcodes agree. No face or QR code is present on any cheque — the qr_code the detector reports on syndicate_syn_0049 is the bank's dog logo, a confirmed false positive."
   },
   "axis_syn_0001.jpg": {
     "pii": [
@@ -47,7 +48,7 @@
     "visual": {
       "face": 0,
       "qr_code": 0,
-      "barcode": 0
+      "barcode": 1
     }
   },
   "axis_syn_0022.jpg": {
@@ -89,7 +90,7 @@
     "visual": {
       "face": 0,
       "qr_code": 0,
-      "barcode": 0
+      "barcode": 1
     }
   },
   "axis_syn_0027.jpg": {
@@ -131,7 +132,7 @@
     "visual": {
       "face": 0,
       "qr_code": 0,
-      "barcode": 0
+      "barcode": 1
     }
   },
   "canara_syn_0009.jpg": {
@@ -421,6 +422,11 @@
           928
         ]
       }
-    ]
+    ],
+    "visual": {
+      "face": 0,
+      "qr_code": 0,
+      "barcode": 0
+    }
   }
 }

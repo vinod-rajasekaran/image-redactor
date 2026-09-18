@@ -250,6 +250,8 @@ originals** to propose a ground truth, then reports the detector's precision
 and recall against it. It writes `runs/visual_audit.json` and never touches
 `datasets/`: what counts as PII is a person's decision, and a truth generated
 by the same model family that grades the output is not independent evidence.
+Both it and `vision_score.py` **merge** into their results files rather than
+replacing them, so a `--limit` or `--corpus` run cannot discard earlier work.
 
 Measured against that proposed truth: **faces 100% precision and 100% recall,
 barcodes 100% and 100%, QR codes 57% and 67%.** QR is weak in both directions

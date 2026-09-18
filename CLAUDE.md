@@ -245,10 +245,15 @@ and VALIDATION in the commit that fixed reading order, with no entry and no
 mention in the commit message, so the decision log asserted 12 while the
 code produced 5 for a day. The entry goes in the same commit as the figure.
 
-**`vision_score.py` overwrites `vision_verdicts.json` with whatever it
-scored this pass.** An API error mid-run yields a *shorter* file, not a
-partial one, and `score_run.py` then quietly falls back to OCR verdicts for
-the missing images. Check the item count before trusting a score.
+**`vision_score.py` merges into `vision_verdicts.json` rather than
+overwriting it** — fixed 2026-09-19, after `--limit 3` replaced a 20-image
+file with three during ordinary testing. Pages scored this pass win, earlier
+pages survive, and entries whose image has left the run are dropped. The
+script says how many it carried over, and warns if the file shrinks anyway.
+`audit_visual.py` merges `runs/visual_audit.json` the same way and for the
+same reason — it was written with the identical bug an hour after the first
+one was fixed. **Any new script that writes a whole results file from a
+partial pass has this bug.** Check the item count before trusting a score.
 
 **`--protect-clinical` removes boxes, which nothing else here does.** Two
 invariants hold it safe and both are easy to break by accident:
