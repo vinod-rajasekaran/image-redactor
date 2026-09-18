@@ -158,6 +158,8 @@ python evaluate_redactor.py --input datasets/documents/images
 python vision_score.py runs/<name>      # ask Claude what survived
 python score_run.py runs/<name>         # the score, a report, and the trend
 python annotate_leaks.py runs/<name>    # draw the failures onto the images
+
+python run_all.py <name>                # all three corpora, one folder, one report
 ```
 
 Drop your own images into `input_images/` and run `evaluate_redactor.py`;
@@ -170,6 +172,31 @@ person, document or account appears anywhere in this repo. `documents/`,
 a clone alone; the third-party corpora under `text/` and `ktp/` are fetched
 on demand. Licences and provenance per corpus:
 [datasets/README.md](datasets/README.md).
+
+`run_all.py <name>` runs and scores **all three image corpora in one go**
+and writes a single tabbed `runs/<name>/report.html`. Each corpus gets a
+complete run folder inside that one:
+
+```
+runs/<name>/
+  report.html          tabbed, all three corpora
+  documents/           an ordinary run folder
+  cheques/
+  holdout/
+```
+
+Nesting rather than merging keeps every existing tool working — each
+subfolder is a run folder, so `python score_run.py runs/<name>/documents` and
+`python compare_runs.py runs/old/cheques runs/new/cheques` behave as they
+always have. `--skip <corpus>` leaves one out, `--no-vision` skips the model
+calls, and any other flags pass through to the pipeline.
+
+**The three percentages are not a leaderboard, and the report says so.**
+`documents/` and `holdout/` are scored per annotated value; `cheques/` carries
+boxes but no ground-truth text, so it is scored per *element* by a vision
+model and its number is not comparable. `documents/` is familiar material the
+recognizers were written against and reads high for that reason; `cheques/` is
+the only independent image corpus here and reads low.
 
 Every scored run writes a `runs/<name>/report.html` and opens it. It leads
 with the **failures** — every item still legible, each beside the page it is
@@ -818,6 +845,7 @@ benchmark_labels.py         label lexicon vs IndiaPII-Bench forms
 cheque_benchmark.py         cheque images + region coverage (Apache-2.0)
 ktp_benchmark.py            label-anchored geometry on ID cards (CC-BY-4.0)
 compare_runs.py             diff two scored runs: marginal catch vs cost
+run_all.py                  all three corpora into one folder and one report
 redactor/report.py          per-run HTML report and benchmarks/history.jsonl
 test_labels.py              label geometry, hand-built OCR
 test_geometry_invariance.py does a spatial constant describe text or page

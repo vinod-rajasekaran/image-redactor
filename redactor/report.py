@@ -317,24 +317,38 @@ def _rows(score: dict) -> str:
 
 
 def _held_out_banner(hist: list[dict], sha: str) -> str:
-    """The count, and whether this commit has already scored this corpus."""
+    """Distinct commits scored, and whether this one has been scored before.
+
+    The signal used to be the raw run count. That stopped meaning anything
+    once every run scores all three corpora — the number then measures how
+    often the suite ran, not how often this corpus was consulted about a
+    decision. **Distinct commits** is the honest replacement: run the suite
+    ten times without committing and it stays at one.
+
+    Repeat scoring of a single commit is called out separately, because that
+    is the specific shape of chasing a result until it reads the way you
+    wanted.
+    """
     times = len(hist)
+    commits = {h.get("git", {}).get("sha") for h in hist if h.get("git", {}).get("sha")}
     same_sha = sum(1 for h in hist if h.get("git", {}).get("sha") == sha)
     repeat = ""
     if same_sha > 1:
         repeat = (
-            f" <b class='bad'>Commit <code>{html.escape(sha)}</code> has now "
-            f"scored it {same_sha} times.</b> Re-scoring one commit is how a "
-            f"result gets chased until it reads the way you wanted."
+            f" <b class='bad'>This commit has scored it {same_sha} times.</b> "
+            f"Re-scoring one commit is how a result gets chased until it reads "
+            f"the way you wanted."
         )
     return (
         f"<div class='callout held'><h2>Held out — a confirmation, not a "
-        f"target</h2><p>Scored <b>{times}</b> time{'' if times == 1 else 's'} in "
-        f"all.{repeat} No backend, threshold, upscale factor or preprocessing "
-        f"choice may be made from this number. Decide with <code>cheques/</code>, "
-        f"IndiaPII-Bench or maskara, then come back here once to see what "
-        f"happened. A rising count means this corpus is being used as a "
-        f"target.</p></div>"
+        f"target</h2><p>Scored at <b>{len(commits)}</b> distinct "
+        f"commit{'' if len(commits) == 1 else 's'} ({times} run"
+        f"{'' if times == 1 else 's'} in all).{repeat} No backend, threshold, "
+        f"upscale factor or preprocessing choice may be made from this number. "
+        f"Decide with <code>cheques/</code>, IndiaPII-Bench or maskara, then "
+        f"come back here to see what happened. <b>The distinct-commit count is "
+        f"the one to watch</b> — running the suite does not move it, but "
+        f"changing the code and looking again does.</p></div>"
     )
 
 
@@ -589,3 +603,217 @@ def open_in_browser(path: Path) -> bool:
         return webbrowser.open(Path(path).resolve().as_uri())
     except Exception:
         return False
+
+
+# --- the combined, tabbed report across a whole run --------------------------
+
+SUITE = ("documents", "cheques", "holdout")
+
+
+def panel(run_dir: Path, corpus_name: str) -> dict | None:
+    """Everything the combined report needs about one corpus in one run.
+
+    A run folder holds one subfolder per corpus, each an ordinary run dir, so
+    every existing tool still works when pointed at `runs/<name>/<corpus>`.
+    Returns None when this corpus was not part of the run, so a partial run
+    still produces a report for what it did do.
+    """
+    from redactor import datasets
+
+    sub = Path(run_dir) / corpus_name
+    if not sub.exists():
+        return None
+    try:
+        corpus = datasets.load(corpus_name)
+    except FileNotFoundError:
+        return None
+
+    score = {}
+    score_path = sub / "score.json"
+    if score_path.exists():
+        try:
+            score = json.loads(score_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            score = {}
+
+    legibility = {}
+    leg_path = sub / "legibility.json"
+    if leg_path.exists():
+        try:
+            legibility = json.loads(leg_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            legibility = {}
+
+    pages = failures(corpus, sub)
+    # Images are referenced from the combined report one level up.
+    for p in pages:
+        if p["shot"]:
+            p["shot"] = f"{corpus_name}/{p['shot']}"
+
+    totals = score.get("totals") or {}
+    if not totals and legibility:
+        # Cheques: elements, not annotated values.
+        covered = sum(v["covered"] for v in legibility.get("by_element", {}).values())
+        leaked = sum(v["leaked"] for v in legibility.get("by_element", {}).values())
+        totals = {"redacted": covered, "leaked": leaked, "unverifiable": 0}
+
+    n = sum(totals.values()) or 1
+    return {
+        "name": corpus_name,
+        "held_out": bool(datasets._meta_of(corpus_name).get("held_out")),
+        "score": score,
+        "legibility": legibility,
+        "failures": pages,
+        "totals": totals,
+        "pct": totals.get("redacted", 0) / n * 100,
+        "unit": "elements" if legibility and not score.get("totals") else "items",
+        "config": score.get("config") or _config_of(sub),
+    }
+
+
+def _config_of(sub: Path) -> dict:
+    try:
+        return json.loads((sub / "summary.json").read_text()).get("config", {})
+    except (OSError, json.JSONDecodeError, KeyError):
+        return {}
+
+
+def _element_table(legibility: dict) -> str:
+    by = legibility.get("by_element") or {}
+    if not by:
+        return ""
+    body = "".join(
+        f"<tr><td>{html.escape(k)}</td><td class='n'>{v['covered'] + v['leaked']}</td>"
+        f"<td class='n ok'>"
+        f"{round(v['covered'] / max(v['covered'] + v['leaked'], 1) * 100)}%</td>"
+        f"<td class='n bad'>{v['leaked']}</td></tr>"
+        for k, v in sorted(by.items(), key=lambda kv: kv[1]["leaked"], reverse=True)
+    )
+    return (
+        "<h2>By element — legibility, not area</h2><div class='scroll'><table>"
+        "<thead><tr><th>element</th><th class='n'>readable before</th>"
+        "<th class='n'>covered</th><th class='n'>still readable</th></tr></thead>"
+        f"<tbody>{body}</tbody></table></div>"
+    )
+
+
+def render_combined(run_dir: Path, panels: list[dict]) -> str:
+    """One page per run, a tab per corpus.
+
+    The three corpora answer different questions and are scored differently,
+    so the tabs are deliberately not a leaderboard: `cheques/` is measured per
+    *element* by a vision model because it carries no ground-truth text, and
+    its number is not comparable with the other two. The summary strip says so
+    rather than lining three percentages up and inviting the comparison.
+    """
+    run_dir = Path(run_dir)
+    git = git_state()
+
+    tabs, bodies, tiles = [], [], []
+    for i, p in enumerate(panels):
+        first = " aria-pressed='true'" if i == 0 else " aria-pressed='false'"
+        hidden = "" if i == 0 else " hidden"
+        name = html.escape(p["name"])
+        hist = history_for(p["name"])
+        spark = _sparkline(
+            [h["recall_floor_pct"] for h in hist], held_out=p["held_out"]
+        )
+        tabs.append(
+            f"<button class='tab' data-tab='{name}'{first}>{name}"
+            f"<span class='badge'>{p['totals'].get('leaked', 0)}</span></button>"
+        )
+        tiles.append(
+            f"<div class='tile{' held' if p['held_out'] else ''}'>"
+            f"<h3>{name}{' · held out' if p['held_out'] else ''}</h3>"
+            f"<div class='pct'>{p['pct']:.1f}%</div>"
+            f"<div class='meter'><i class='ok' style='width:{p['pct']:.1f}%'></i>"
+            f"<i class='bad' style='width:{100 - p['pct']:.1f}%'></i></div>"
+            f"<p>{p['totals'].get('redacted', 0)} covered · "
+            f"<b class='bad'>{p['totals'].get('leaked', 0)}</b> still legible · "
+            f"{sum(p['totals'].values())} {p['unit']}</p></div>"
+        )
+        conf = " · ".join(
+            f"{html.escape(k)} <b>{html.escape(str(p['config'][k]))}</b>"
+            for k in CONFIG_KEYS if k in p["config"]
+        ) or "<b>defaults</b>"
+        bodies.append(
+            f"<section class='panel' data-panel='{name}'{hidden}>"
+            + (_held_out_banner(hist, git["sha"]) if p["held_out"] else "")
+            + f"<p class='note'>{conf}</p>"
+            + (f"<div class='callout'><h2>Trend</h2>{spark}{_delta_line(hist)}</div>"
+               if spark else "")
+            + _failure_section(p["failures"])
+            + _rows(p["score"])
+            + _element_table(p["legibility"])
+            + "</section>"
+        )
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(run_dir.name)} — redaction run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>{STYLE}
+.tabs{{display:flex;gap:6px;flex-wrap:wrap;margin-top:32px;border-bottom:1px solid var(--rule);
+  padding-bottom:0}}
+.tab{{border-radius:8px 8px 0 0;border-bottom-color:transparent;margin-bottom:-1px;
+  display:flex;align-items:center;gap:8px}}
+.tab[aria-pressed="true"]{{background:var(--surface);color:var(--ink);
+  border-color:var(--rule);border-bottom-color:var(--surface)}}
+.badge{{font-size:11px;font-variant-numeric:tabular-nums;background:var(--leaked-bg);
+  color:var(--leaked);border-radius:999px;padding:1px 7px;font-weight:700}}
+.tab[aria-pressed="true"] .badge{{background:var(--leaked-bg);color:var(--leaked)}}
+.panel{{padding-top:4px}}
+</style></head><body><div class="wrap">
+<header>
+  <div class="eyebrow">one run · three corpora · vision-scored</div>
+  <h1>{html.escape(run_dir.name)}</h1>
+  <p class="note mono">{html.escape(git['sha'])}{
+    ' (uncommitted changes)' if git['dirty'] else ''} — {html.escape(git['subject'])}</p>
+</header>
+
+<div class="tiles">{''.join(tiles)}</div>
+
+<p class="note"><b>These three numbers are not a leaderboard.</b>
+<code>documents/</code> and <code>holdout/</code> are scored per annotated
+value; <code>cheques/</code> carries boxes but no ground-truth text, so it is
+scored per <i>element</i> by a vision model and its percentage is not
+comparable with the other two. <code>documents/</code> is familiar material
+the recognizers were written against and reads high for that reason;
+<code>cheques/</code> is the only independent image corpus here and reads
+low.</p>
+
+<div class="tabs">{''.join(tabs)}</div>
+{''.join(bodies)}
+
+<footer>
+  <p>Each corpus is a complete run folder under this one —
+  <code>{html.escape(run_dir.name)}/documents</code> and so on — so every tool
+  still works pointed at one: <code>score_run.py</code>,
+  <code>annotate_leaks.py</code>, <code>compare_runs.py</code>. Images are read
+  from those folders by relative path, so this page works offline.</p>
+  <p>Written by <code>run_all.py</code>. History:
+  <code>benchmarks/history.jsonl</code>.</p>
+</footer>
+</div><script>{SCRIPT}
+const tabs = [...document.querySelectorAll('.tab')];
+tabs.forEach(t => t.addEventListener('click', () => {{
+  tabs.forEach(o => o.setAttribute('aria-pressed', o === t ? 'true' : 'false'));
+  document.querySelectorAll('.panel').forEach(p => {{
+    p.hidden = p.dataset.panel !== t.dataset.tab;
+  }});
+  const active = document.querySelector('.panel:not([hidden])');
+  if (active) {{
+    const btns = [...active.querySelectorAll('.controls button')];
+    btns.forEach(b => b.setAttribute('aria-pressed',
+      b.dataset.f === 'all' ? 'true' : 'false'));
+  }}
+}}));
+</script></body></html>"""
+
+
+def write_combined(run_dir: Path, panels: list[dict]) -> Path:
+    path = Path(run_dir) / "report.html"
+    path.write_text(render_combined(run_dir, panels), encoding="utf-8")
+    return path

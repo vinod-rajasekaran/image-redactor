@@ -238,18 +238,30 @@ def test_history_marks_held_out() -> bool:
                 "page says confirmation, not a target",
                 "confirmation, not a target" in page,
             ))
-            ok.append(check("page shows the scored count", "Scored <b>1</b>" in page))
+            # Distinct commits, not raw runs. Once the suite scores every
+            # corpus on every run, a run count measures how often the suite
+            # ran, not how often this corpus was consulted about a decision.
+            ok.append(check(
+                "page counts distinct commits, not runs",
+                "distinct commit" in page and "Scored at <b>1</b>" in page,
+            ))
             ok.append(check(
                 "page names the corpora that may decide a change",
                 "IndiaPII-Bench" in page and "cheques/" in page,
             ))
 
-            # A second score at the same commit must say so.
+            # A second score at the same commit must say so, and must NOT
+            # move the distinct-commit count — that is the whole point of
+            # counting commits instead of runs.
             report.record(score, HELD_OUT, held_out=True)
             page2 = report.render(score, HELD_OUT, held_out=True)
             ok.append(check(
                 "re-scoring one commit is called out",
-                "has now\nscored it 2 times" in page2 or "scored it 2 times" in page2,
+                "scored it 2 times" in page2,
+            ))
+            ok.append(check(
+                "re-scoring does not move the distinct-commit count",
+                "Scored at <b>1</b>" in page2 and "(2 runs in all)" in page2,
             ))
             ok.append(check(
                 "trend is drawn in the warning colour, not the accent",

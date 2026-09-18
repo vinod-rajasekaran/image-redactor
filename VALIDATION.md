@@ -60,23 +60,27 @@ session could reach for it.
 
 `datasets/holdout/` is an 11-page, 71-item corpus generated with an OpenAI
 image model, prompted by the repository owner, and **held out: no OCR system
-may ever be tuned on it.** Its first and only score, vision-scored, defaults,
-`runs/holdout`:
+may ever be tuned on it.** Scored twice, vision-scored, defaults — at
+`4b44f75` (`runs/holdout`) and at `e914d29` (`runs/suite-1/holdout`):
 
 | tier | redacted | leaked | floor |
 |---|---:|---:|---:|
 | core | 53 | 9 | **85.5%** |
 | sensitive | 3 | 6 | **33.3%** |
-| **all** | **56** | **15** | **78.9%** |
+| **all, ceiling** | 56 | 15 | 78.9% |
+| **all, floor** | **55** | **16** | **77.5%** |
 
-Publish the floor. `vision_score.py` and `score_run.py` disagree by one item
-on this run — 57/14 against 56/15 — which is the same 0–1 noise band the
-`documents/` scoring shows, landing on partial coverage.
+**Publish 77.5%.** The corpus has now been scored at two commits — `4b44f75`
+and `e914d29` — and returned 56/71 then 55/71. **No detection code changed
+between them**: both intervening commits touched reporting and documentation
+only. So this is the scorer's own band, the same 0–1 movement `documents/`
+shows, landing on partially covered values. The band is **55–56 of 71** and
+the floor is what this file states.
 
-**78.9% against 90.9% on `documents/` is the point of the corpus, not a
+**77.5% against 90.9% on `documents/` is the point of the corpus, not a
 regression.** Both are this project's own images; the difference is that the
 recognizers were written while looking at one of them and have never seen the
-other. Read the 12-point gap as the cost of familiarity in the `documents/`
+other. Read the 13-point gap as the cost of familiarity in the `documents/`
 figure.
 
 Where the items went:
@@ -117,7 +121,7 @@ here was fitted to.** Every other self-produced figure in this project was
 measured on images that were available while the recognizers were being
 written; this one will not be.
 
-Read its first score with two things in mind. Nine of its 11 pages are about
+Read its score with two things in mind. Nine of its 11 pages are about
 471×363, so a miss there may be measuring resolution rather than detection.
 And three of its cases exist nowhere else in this project's images — a
 Devanagari name, a second checksum-invalid Aadhaar, and two people on one

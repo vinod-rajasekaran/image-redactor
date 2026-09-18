@@ -108,6 +108,14 @@ off by default because it pulls in torch.
   (`--protect-clinical`), for documents a clinician or downstream model
   must still be able to read. See the trap below before changing it.
 
+`run_all.py` runs all three image corpora into **one** run folder —
+`runs/<name>/{documents,cheques,holdout}/` — and writes a tabbed
+`report.html` beside them. Each subfolder is an ordinary run folder, so
+`score_run.py`, `annotate_leaks.py` and `compare_runs.py` all still work
+pointed at one. Do not flatten this: merging the corpora into a single
+`images/` would make a cross-corpus filename collision silent, which has
+already cost a wrong score once.
+
 `datasets/` holds every validation corpus — images and annotations
 together, one schema, loaded through `redactor.datasets.load(name)`.
 **Every corpus is synthetic**, and each one's `_meta` block states its

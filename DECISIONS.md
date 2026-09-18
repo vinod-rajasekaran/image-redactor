@@ -3040,3 +3040,124 @@ items and the note "any detection here is a false positive". The pipeline
 detected none and copied it through. It is a false-positive control and it
 passed — worth stating, because an image missing from a score listing
 normally means a dropped page.
+
+---
+
+## 2026-09-18 — One run, three corpora, one folder, one tabbed report
+
+`run_all.py <name>` redacts and scores `documents/`, `cheques/` and
+`holdout/` in a single command and writes one tabbed
+`runs/<name>/report.html`. Each corpus gets a **complete run folder inside**
+that one:
+
+    runs/<name>/
+      report.html          tabbed, all three
+      documents/           an ordinary run folder
+      cheques/
+      holdout/
+
+### Nested, not merged, and that is the whole design
+
+Every tool here takes a run directory and expects `images/`, `scored/` and
+`score.json` beside each other. Nesting keeps each subfolder a run folder
+those tools already understand, so nothing needed rewriting:
+
+    python score_run.py runs/<name>/documents
+    python compare_runs.py runs/old/cheques runs/new/cheques
+
+`evaluate_redactor.py` builds its output path as `runs_dir / run_name`, so a
+run name containing a slash nests for free — no change to that script at all.
+
+Merging the three into one flat folder was the alternative and it is worse in
+a specific way: it would have meant teaching every tool which corpus each
+image belonged to, and **a filename collision between corpora would have been
+silent.** That is not hypothetical — `holdout/01_aadhaar_card.png` collided
+with `documents/01_aadhaar_card.png` earlier today and produced a
+whole-corpus verdict shape carrying one page's numbers. Same folder, same
+failure, but with no `h` prefix available to fix it.
+
+### The tabs are deliberately not a leaderboard
+
+Three percentages side by side invite a comparison that is not valid, so the
+report says so above the tabs and the terminal summary repeats it:
+
+- `documents/` and `holdout/` are scored **per annotated value**.
+- `cheques/` carries boxes and no ground-truth text, so it is scored **per
+  element** by a vision model. Its percentage is a different measurement.
+- `documents/` is familiar material the recognizers were written against and
+  reads high for that reason; `cheques/` is the only independent image corpus
+  here and reads low. The gap between them is mostly that, not quality.
+
+### Scoring `holdout/` on every run broke the warning signal, so the signal changed
+
+The suite scores all three every time, by request. That makes the held-out
+**run count** meaningless as a warning: it now measures how often the suite
+ran, not how often the corpus was consulted about a decision.
+
+The signal is therefore **distinct commits scored**. Run the suite ten times
+without committing and it stays at one; change the code and look again and it
+moves. Re-scoring a single commit is still called out separately, because
+that is the specific shape of chasing a result. `test_holdout_guard.py` pins
+both: that the count is of commits, and that a second run at one commit does
+not move it.
+
+**This is a weakening and it should be recorded as one.** Seeing the holdout
+number on every run makes steering on it easier, not harder. The guard still
+refuses sweeps; the counter still records; but the discipline is now more
+of a human one than it was this morning. `--skip holdout` exists for runs
+where the number is not wanted.
+
+### Failures never abort the suite
+
+Each corpus is caught independently, in keeping with the standing rule that a
+per-image failure never aborts a batch — the same now applies a level up. A
+corpus that fails to redact is reported and skipped, and the report is
+written for whatever did complete.
+
+---
+
+## 2026-09-18 — First suite run, and `holdout/` turns out to have its own noise band
+
+First `run_all.py` run, `runs/suite-1`, defaults, at `e914d29`:
+
+| corpus | covered | leaked | floor | scored by |
+|---|---:|---:|---:|---|
+| `documents/` | 70 | 7 | **90.9%** | value legibility |
+| `cheques/` | 44 | 16 | **73.3%** | element legibility |
+| `holdout/` | 55 | 16 | **77.5%** | value legibility |
+
+### The interesting result is not any of those numbers, it is that two moved
+
+`documents/` scored 92.2% (71/77) at `5376bb3` and 90.9% (70/77) at
+`e914d29`. `holdout/` scored 78.9% (56/71) at `4b44f75` and 77.5% (55/71) at
+`e914d29`.
+
+**No detection code changed across any of those commits.** `5376bb3` added
+the report and the history; `e914d29` restyled the report and persisted
+cheque legibility. Neither touched OCR, recognizers, geometry or rendering.
+The redacted images are byte-identical. So both movements are the **vision
+scorer disagreeing with itself**, which is the 0–1 band already documented
+for `documents/` — now measured a second time, and on a second corpus.
+
+Two consequences, and the second is a correction:
+
+- `documents/` at 90.9% overall is the **floor**, confirmed by landing on it
+  again from above. The published headline is unchanged and now has one more
+  observation behind it.
+- **`holdout/`'s published figure was wrong by one item.** The earlier entry
+  reported 78.9% (56/71) as its score. That is the **ceiling** of a 55–56
+  band; the floor is **77.5%**. `VALIDATION.md` is corrected to state 77.5%
+  and the band. The entry reporting 78.9% stands as written — this supersedes
+  its headline rather than rewriting it.
+
+This is the seventh correction to a published number in this project, and it
+arrived the same way as several earlier ones: by measuring twice rather than
+by finding a bug.
+
+### What it says about the holdout counter
+
+The distinct-commit count is now **2**, and both scorings were confirmations
+of changes that could not have affected redaction. That is the counter
+working as intended — it rose because the code moved, not because the suite
+ran twice. It is also a reminder that a 1-point movement on this corpus means
+nothing on its own: the band is a point and a half wide.
