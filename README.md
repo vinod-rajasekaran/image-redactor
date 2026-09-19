@@ -206,8 +206,10 @@ covers. The images come from `annotate_leaks.py` where one exists, so the
 boxes mark what the scorer flagged; they are read from the run folder by
 relative path, so the page works offline and moves with the run. Below that:
 the tier and entity breakdowns, a trend across previous runs of the same
-corpus, and the commit each past number came from. Pass `--no-open` to write
-it without opening a browser.
+corpus, and the commit each past number came from. The trend states no delta
+when the corpus has changed size, and says why instead: a percentage across a
+moved denominator is not a trend. Pass `--no-open` to write it without opening
+a browser.
 
 Corpora annotated with boxes rather than text — `cheques/` — have no
 per-value verdicts, so their failures come from `legibility.json`, which
@@ -227,7 +229,7 @@ the current commit has scored it before. That count is the signal to watch:
 a rising one means the corpus is being used as a target, which is tuning
 however slowly it happens.
 
-`datasets/holdout/` is a **held-out test set of 11 pages and 71 items, and
+`datasets/holdout/` is a **held-out test set of 21 pages and 118 items, and
 no OCR system may ever be tuned on it** — not backend selection, not PSM,
 not upscale factors, not preprocessing variants, not thresholds.
 Scoring it once with a configuration chosen elsewhere is its purpose;
@@ -254,9 +256,13 @@ Both it and `vision_score.py` **merge** into their results files rather than
 replacing them, so a `--limit` or `--corpus` run cannot discard earlier work.
 
 Measured against that proposed truth: **faces 100% precision and 100% recall,
-barcodes 100% and 100%, QR codes 57% and 67%.** QR is weak in both directions
-— two false positives on `documents/`, two misses on `holdout/` — and is the
-one visual detector worth work.
+barcodes 100% and 88%, QR codes 75% and 82%.** The barcode miss is a boarding
+pass. QR is weak in both directions — three false positives across
+`documents/` and `cheques/`, and two misses on `holdout/` that are two
+different failures: a contrast failure where the code sits on an Aadhaar
+guilloche, and a module-resolution failure that only upscaling rescues. No
+single preprocessing step covers both, and QR is the one visual detector
+worth work.
 
 ### Options
 

@@ -3408,3 +3408,39 @@ a person doing it by hand is the same act.
 `cheques/`, or a third-party corpus, that exhibit the same two failure modes.
 The precision cost is already measurable on the permitted corpora; it is the
 recall evidence that lives in the wrong place.
+
+## 2026-09-19 — README carried the pre-growth holdout and QR figures for a commit
+
+**Corrected.** Three figures in `README.md` described the state before
+`0d19021`, while `VALIDATION.md`, `DECISIONS.md` and `datasets/README.md` had
+all moved on. This is the failure the documentation rule exists to catch, so
+it is recorded rather than quietly patched.
+
+| Where | Said | Is |
+|---|---|---|
+| holdout description | held-out test set of **11 pages and 71 items** | **21 pages and 118 items** |
+| visual detection | barcodes **100% / 100%**, QR **57% / 67%**, two false positives | barcodes **100% / 88%**, QR **75% / 82%**, **three** false positives |
+| the run report | trend across previous runs, no mention of the denominator guard | `_delta_line` states no delta when the corpus has changed size |
+
+**Why it happened.** The commit that grew the corpus rewrote `VALIDATION.md`
+wholesale — that file is organised by corpus, so a corpus changing size forces
+the edit. `README.md` mentions the same counts in prose, in two sections that
+the change did not otherwise touch, and nothing pointed from one to the other.
+
+**Why `check_docs.py` passed.** It enforces tense, link and anchor resolution,
+and that every script is documented. A figure going stale breaks none of
+those: the sentence is still present tense, and `datasets/holdout/` still
+resolves. Numeric freshness is not machine-checkable here without a canonical
+source for each figure, which does not exist — the numbers live in prose in
+three files by design, because each states a different thing about them.
+
+**Not corrected, because it is not wrong:** the 95.8% core / 90.9% overall
+headline in `README.md` and `CLAUDE.md`. suite-2 scored `documents/` at 92.2%
+overall, which is 70/72 core — the ceiling of the known 69-70 band, not a new
+result. The project publishes the floor, so the headline stands.
+
+**What would prevent a recurrence:** the check that would have caught this is
+a grep for a corpus's item count appearing in more than one file with
+different values. Worth writing when a fourth file carries these numbers; with
+three, the rule in `CLAUDE.md` is to update all of them in the same commit,
+and the failure here is that the rule was followed for two of three.
